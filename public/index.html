@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Donkey — Online Cards</title>
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Direct CDN script to ensure Socket.io loads reliably across all devices and hosting platforms -->
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <style>
     :root {
       --felt: #0b503f;
@@ -398,7 +399,12 @@
   </div>
 
   <script>
-    const socket = io();
+    // Initialize Socket.io client
+    const socket = typeof io !== 'undefined' ? io() : null;
+    if (!socket) {
+      alert("Socket.io failed to load. Please check your internet connection.");
+    }
+
     let state = null;
     let me = null;
     let previousTurn = null;
@@ -415,8 +421,23 @@
     function name() { return $('name').value.trim().slice(0, 24) || 'Player'; }
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-    $('create').onclick = () => { err(''); socket.emit('create', { name: name(), double:$('deck').value === 'double' }); };
-    $('join').onclick = () => { err(''); socket.emit('join', { name: name(), code:$('code').value }); };
+    $('create').onclick = () => {
+      err('');
+      if (!socket || !socket.connected) {
+        err('Connecting to server... Please wait a moment and try again.');
+        return;
+      }
+      socket.emit('create', { name: name(), double: $('deck').value === 'double' });
+    };
+
+    $('join').onclick = () => {
+      err('');
+      if (!socket || !socket.connected) {
+        err('Connecting to server... Please wait a moment and try again.');
+        return;
+      }
+      socket.emit('join', { name: name(), code: $('code').value });
+    };
 
     socket.on('created', x => {
       $('code').value = x.code;
@@ -445,7 +466,7 @@
     }
 
     function syncHandOrderToServer() {
-      socket.emit('reorderHand', { cardIds: localHand.map(c => c.id) });
+      if (socket) socket.emit('reorderHand', { cardIds: localHand.map(c => c.id) });
     }
 
     socket.on('starterAlert', () => {

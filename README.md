@@ -1,0 +1,28 @@
+# Donkey Online — multiplayer card game
+
+Node.js + Express + Socket.IO. Files: `server.js`, `package.json`, `public/index.html` (the client **must** live in `public/`).
+
+## Run
+`npm install` then `npm start` → http://localhost:3000. Deploy on Render/Railway (Node 18+, WebSocket support, run `npm start`, HTTPS).
+
+## Rules implemented
+- **Rooms**: 3-letter code while fewer than 100 rooms are active (4 letters beyond that). Scannable QR code (`/qr/CODE`) opens the site with the code pre-filled. Up to 20 people; anyone joining mid-match **waits** and is seated at the next deal.
+- **Decks**: single or double. Equal ranks: first pack wins. First-pack cards carry a gold ● in double-deck games.
+- **Opening**: holder of the (first-pack) Ace of Spades starts. ≤6 players: Ace auto-plays after 15 s. >6: holder gets sound + vibration and leads any card.
+- **Tricks**: follow the lead suit if you can. Table cards are shown in ascending order; the highest lead-suit card is highlighted with its player's name and colour. All follow → highest wins, cards are folded, winner leads. Off-suit card = **HIT**: round ends at once, highest lead-suit player takes every card on the table including the HIT card.
+- **Winning**: first to empty their hand wins, but the game only ends when one player is left (the Donkey). Finishing ranks are shown.
+- **Surrender**: when exactly 3 players remain, any of them can raise the white flag (🏳 on a brown stick); one of the other two must approve. The surrenderer becomes the Donkey.
+- **Hand**: drag to reorder; Auto-sort re-sorts incoming cards and switches itself off after a manual drag.
+- **Card request**: before leading, the round starter asks the next player for **all** their cards (15 s to answer, auto-declines). ≤3 cards: shown face-up to everyone. >3: 8-second popup saying who gave whom and how many.
+- **Timers**: 35 s per turn, 15 s if the player was inactive in the previous round. At 25 s: beeps + vibration, and the host plus next three players may grant +30 s (once per turn). Timeout auto-plays a legal card just below the current high card, else the lowest lead-suit card. If a player holds exactly one card of the required suit, it is auto-played after 10 s and is **not** counted as inactive.
+- **Neon-green flash** (3×) appears only for the player whose turn it is.
+- **Host**: pause/resume; kick players before a match starts. Offline players auto-play after 5 s.
+- **New game vote**: shown when a player is offline or inactive for 2 rounds; needs min(3, majority of online players) votes. Offline and inactive players are pruned before every deal.
+
+## Interpretations (change in `server.js` if you meant otherwise)
+- Surrender can be offered by any of the final 3 players, not only the last-placed one.
+- "Request cards" transfers the next player's whole hand; the giver is then out of the game (finishes).
+- The finished trick stays on the table for 2 s (3 s after a HIT) before clearing.
+
+## Not done yet
+Reconnect after refresh (a dropped player is marked offline), touch drag-and-drop for reordering, rate limiting, automated tests.

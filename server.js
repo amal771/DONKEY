@@ -21,6 +21,7 @@ const SUITS = ['♠', '♥', '♦', '♣'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const COLORS = ['#E57373', '#81C784', '#64B5F6', '#FFD54F', '#BA68C8', '#4DB6AC', '#FF8A65', '#A1887F', '#90A4AE', '#4DD0E1',
   '#F06292', '#AED581', '#7986CB', '#DCE775', '#9575CD', '#26A69A', '#FFB74D', '#80CBC4', '#F48FB1', '#CE93D8'];
+const TURN_SECS = 50; // normal turn length (15s if inactive in previous round)
 const ACE = '0A♠'; // Ace of Spades from the first pack opens the match
 const rooms = new Map();
 
@@ -82,7 +83,7 @@ function newPlayer(r, id, name) {
 function setTurn(r, id) {
   const p = P(r, id);
   r.turn = id; r.elapsed = 0; r.granted = false; r.eligible = null;
-  r.limit = r.opening ? 15 : (p && p.inactiveRounds >= 1 ? 15 : 35); // 15s if inactive in previous round
+  r.limit = r.opening ? 15 : (p && p.inactiveRounds >= 1 ? 15 : TURN_SECS); // 15s if inactive in previous round
 }
 
 function tick(r) {
@@ -92,7 +93,7 @@ function tick(r) {
   io.to(r.code).emit('tick', { left: Math.max(0, r.limit - r.elapsed), limit: r.limit });
   const ls = r.leadSuit && r.table.length ? p.hand.filter(c => c.suit === r.leadSuit) : [];
   if (p.online && ls.length === 1 && r.elapsed === 10) return auto(r, p, true); // single legal card: auto-dealt, not inactive
-  if (p.online && !r.opening && r.limit >= 35 && r.limit - r.elapsed === 10) {
+  if (p.online && !r.opening && r.limit >= TURN_SECS && r.limit - r.elapsed === 10) {
     io.to(p.id).emit('turnWarning');
     const s = seated(r), i = s.findIndex(x => x.id === p.id), el = new Set();
     if (r.hostId !== p.id) el.add(r.hostId);
@@ -244,7 +245,7 @@ io.on('connection', s => {
 
   s.on('create', ({ name, double }) => {
     const code = newCode();
-    const r = { code, hostId: s.id, starterId: null, players: [], phase: 'lobby', paused: false, double: !!double, turn: null, limit: 35, elapsed: 0,
+    const r = { code, hostId: s.id, starterId: null, players: [], phase: 'lobby', paused: false, double: !!double, turn: null, limit: TURN_SECS, elapsed: 0,
       table: [], order: [], request: null, votes: new Set(), surrender: null, donkey: null, notice: 'Waiting for players to join.', round: 0, finished: 0 };
     rooms.set(code, r); join(r, name);
     s.emit('created', { code }); emit(r);

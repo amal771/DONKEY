@@ -14,7 +14,7 @@ Node.js + Express + Socket.IO. Files: `server.js`, `package.json`, `public/index
 - **Surrender**: when exactly 3 players remain, any of them can raise the white flag (🏳 on a brown stick); one of the other two must approve. The surrenderer becomes the Donkey.
 - **Hand**: drag to reorder; Auto-sort re-sorts incoming cards and switches itself off after a manual drag.
 - **Card request**: before leading, the round starter asks the next player for **all** their cards (15 s to answer, auto-declines). ≤3 cards: shown face-up to everyone. >3: 8-second popup saying who gave whom and how many.
-- **Timers**: 35 s per turn, 15 s if the player was inactive in the previous round. At 25 s: beeps + vibration, and the host plus next three players may grant +30 s (once per turn). Timeout auto-plays a legal card just below the current high card, else the lowest lead-suit card. If a player holds exactly one card of the required suit, it is auto-played after 10 s and is **not** counted as inactive.
+- **Timers**: 50 s per turn, 15 s if the player was inactive in the previous round. With 10 s left: beeps + vibration, and the host plus next three players may grant +30 s (once per turn). Timeout auto-plays a legal card just below the current high card, else the lowest lead-suit card. If a player holds exactly one card of the required suit, it is auto-played after 10 s and is **not** counted as inactive.
 - **Neon-green flash** (3×) appears only for the player whose turn it is.
 - **Host**: pause/resume; kick players before a match starts. Offline players auto-play after 5 s.
 - **New game vote**: shown when a player is offline or inactive for 2 rounds; needs min(3, majority of online players) votes. Offline and inactive players are pruned before every deal.

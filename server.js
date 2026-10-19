@@ -54,7 +54,7 @@ function pub(room, viewer) {
       color: PLAYER_COLORS[idx % PLAYER_COLORS.length]
     })),
     turn: room.turn,
-    turnStartedAt: room.turnStartedAt,
+    turnSecondsLeft: room.turnSecondsLeft,
     turnDuration: room.turnDuration,
     leader: room.leader,
     leadSuit: room.leadSuit,
@@ -113,7 +113,7 @@ function createRoom(socket, name, double) {
     paused: false,
     double,
     turn: null,
-    turnStartedAt: null,
+    turnSecondsLeft: 35,
     turnDuration: 35,
     timer: null,
     lastLeadSuit: null,
@@ -187,14 +187,12 @@ function start(r) {
   r.round = 0;
   r.lastLeadSuit = null;
 
-  // RULE 1: Play is started strictly by the player who holds the Ace of Spades[cite: 3, 4]
   let aceHolder = r.players.find(p => p.hand.some(c => c.suit === '♠' && c.rank === 'A'));
-  if (!aceHolder) aceHolder = r.players[0]; // fallback safety
+  if (!aceHolder) aceHolder = r.players[0];
 
   r.gameStarterId = aceHolder.id;
 
   if (r.players.length <= 6) {
-    // 6 or fewer players: Ace of Spades is automatically played[cite: 3, 4]
     let ace = aceHolder.hand.find(c => c.suit === '♠' && c.rank === 'A');
     if (ace) {
       aceHolder.hand.splice(aceHolder.hand.indexOf(ace), 1);
@@ -205,7 +203,6 @@ function start(r) {
       r.notice = `${aceHolder.name} held the Ace of Spades; it is auto-played to start the match!`;
     }
   } else {
-    // More than 6 players: Player with Ace of Spades must choose a card to deal[cite: 3, 4]
     r.turn = aceHolder.id;
     r.leader = aceHolder.id;
     r.leadSuit = null;
@@ -223,8 +220,6 @@ function autoPlayInactiveCard(r, p) {
   let cardToPlay = null;
 
   if (!r.leadSuit || r.table.length === 0) {
-    // Inactive player starting a round:
-    // If they previously led and folded/hit, alternate suit if possible
     let availableSuits = [...new Set(p.hand.map(c => c.suit))];
     let chosenSuit = availableSuits[0];
     if (r.lastLeadSuit && availableSuits.length > 1) {
@@ -233,23 +228,19 @@ function autoPlayInactiveCard(r, p) {
     const suitCards = p.hand.filter(c => c.suit === chosenSuit).sort((a, b) => a.value - b.value);
     cardToPlay = suitCards[0] || p.hand[0];
   } else {
-    // Inactive player following a trick:
     const leadSuitCards = p.hand.filter(c => c.suit === r.leadSuit).sort((a, b) => a.value - b.value);
     if (leadSuitCards.length > 0) {
-      // Find current highest lead-suit card on the table
       const currentHigh = r.table
         .filter(x => x.card.suit === r.leadSuit)
         .sort((a, b) => cmp(b.card, a.card))[0];
 
-      // Try playing a card lower than the highest card
       const lowerCards = leadSuitCards.filter(c => currentHigh && c.value < currentHigh.card.value);
       if (lowerCards.length > 0) {
-        cardToPlay = lowerCards[lowerCards.length - 1]; // Closest card lower than high card
+        cardToPlay = lowerCards[lowerCards.length - 1];
       } else {
-        cardToPlay = leadSuitCards[0]; // Lowest card of the lead suit
+        cardToPlay = leadSuitCards[0];
       }
     } else {
-      // No lead suit: play lowest off-suit card
       cardToPlay = [...p.hand].sort((a, b) => a.value - b.value)[0];
     }
   }
@@ -264,38 +255,32 @@ function setTurnTimer(r) {
   if (r.phase !== 'playing' || r.paused) return;
 
   const currentTurnPlayer = r.players.find(p => p.id === r.turn);
-  const isStartOfTrick = !r.leadSuit || r.table.length === 0;
-  const wasPrevInactive = currentTurnPlayer && (currentTurnPlayer.inactiveRounds > 0 || currentTurnPlayer.wasInactiveThisTurn);
+  if (!currentTurnPlayer) return;
 
-  // If it's a new round lead and player was previously inactive, trigger at 7s
-  const inactivityThreshold = (isStartOfTrick && wasPrevInactive) ? 7 : 15;
+  // RULE: Continuous inactivity for 2 rounds (inactiveRounds >= 1) means 15s timer; otherwise 35s
+  const isContinuousInactive = (currentTurnPlayer.inactiveRounds || 0) >= 1;
+  const allottedTime = isContinuousInactive ? 15 : 35;
 
-  r.turnDuration = 35;
-  r.turnStartedAt = Date.now();
+  r.turnDuration = allottedTime;
+  r.turnSecondsLeft = allottedTime;
   let elapsed = 0;
-  let inactivityHandled = false;
   let beepSent = false;
 
   r.timer = setInterval(() => {
     if (r.paused) return;
     elapsed++;
+    r.turnSecondsLeft = Math.max(0, r.turnDuration - elapsed);
 
-    // Inactivity card auto-play
-    if (elapsed >= inactivityThreshold && !inactivityHandled) {
-      inactivityHandled = true;
-      const p = r.players.find(x => x.id === r.turn);
-      if (p) autoPlayInactiveCard(r, p);
-      return;
-    }
+    // Broadcast ticking timer to all players
+    emit(r);
 
-    // 25s warning: 3 beeps, vibration, and time request popup to next 3 players + host
-    if (elapsed === 25 && !beepSent) {
+    // Beep warning at 10 seconds remaining for long turns
+    if (r.turnDuration >= 35 && elapsed === 25 && !beepSent) {
       beepSent = true;
-      if (currentTurnPlayer && currentTurnPlayer.online) {
+      if (currentTurnPlayer.online) {
         io.to(currentTurnPlayer.id).emit('turnWarning');
       }
 
-      // Identify host + next 3 players
       const currIdx = r.players.findIndex(p => p.id === r.turn);
       const eligible = new Set();
       if (r.hostId !== r.turn) eligible.add(r.hostId);
@@ -303,16 +288,15 @@ function setTurnTimer(r) {
         let pNext = r.players[(currIdx + i) % r.players.length];
         if (pNext && pNext.online && pNext.id !== r.turn) eligible.add(pNext.id);
       }
-
       eligible.forEach(pid => {
         io.to(pid).emit('allowTimePrompt', { forPlayer: currentTurnPlayer?.name });
       });
     }
 
-    // Overall 35s hard timeout
+    // Auto-play when time runs out
     if (elapsed >= r.turnDuration) {
-      const p = r.players.find(x => x.id === r.turn);
-      if (p) autoPlayInactiveCard(r, p);
+      clearRoomTimer(r);
+      autoPlayInactiveCard(r, currentTurnPlayer);
     }
   }, 1000);
 }
@@ -332,6 +316,10 @@ function play(r, p, cardId, isAutomated = false) {
   p.hand.splice(i, 1);
   if (isAutomated) {
     p.wasInactiveThisTurn = true;
+  } else {
+    // Player manually played: clear inactive status
+    p.wasInactiveThisTurn = false;
+    p.inactiveRounds = 0;
   }
 
   if (!r.leadSuit) {
@@ -349,7 +337,6 @@ function play(r, p, cardId, isAutomated = false) {
   r.table.push({ playerId: p.id, card });
 
   if (card.suit !== r.leadSuit) {
-    // Off-suit HIT![cite: 3, 4]
     r.pot.push(...r.table.map(x => x.card));
     let winner = r.table
       .filter(x => x.card.suit === r.leadSuit)
@@ -365,7 +352,6 @@ function play(r, p, cardId, isAutomated = false) {
     r.round++;
     updateInactiveRounds(r);
   } else if (r.table.length >= r.players.filter(x => x.online && (x.hand.length > 0 || x.id === p.id)).length) {
-    // Round won normally[cite: 3, 4]
     let winner = r.table.slice().sort((a, b) => cmp(b.card, a.card))[0];
     r.pot.push(...r.table.map(x => x.card));
     r.notice = `Round won by ${r.players.find(x => x.id === winner.playerId).name}. Cards folded.`;
@@ -478,6 +464,7 @@ io.on('connection', s => {
     let r = roomFor(s);
     if (!r || r.phase !== 'playing') return;
     r.turnDuration += 30;
+    r.turnSecondsLeft += 30;
     r.notice = `Additional 30 seconds granted for current turn!`;
     emit(r);
   });
@@ -496,13 +483,11 @@ io.on('connection', s => {
     const starter = r.players.find(p => p.id === r.gameStarterId);
     const starterCanCallOff = starter && (!starter.online || (starter.inactiveRounds || 0) >= 3);
 
-    // If game starter clicks call off after 3 inactive rounds:
     if (s.id === r.gameStarterId && r.players.some(p => (p.inactiveRounds || 0) >= 3 || !p.online)) {
       callOffAndReset(r, 'Game called off by starter due to player inactivity.');
       return;
     }
 
-    // Otherwise, 3 votes or majority of active players triggers a call-off
     const activePlayers = r.players.filter(p => p.online && (p.inactiveRounds || 0) < 2);
     const majority = Math.ceil(activePlayers.length / 2);
     if (r.callOffVotes.size >= 3 || r.callOffVotes.size >= majority || starterCanCallOff) {
@@ -514,7 +499,6 @@ io.on('connection', s => {
 
   s.on('requestCards', ({ count }) => {
     let r = roomFor(s);
-    // RULE 3: Request allowed only when player starts the round
     if (!r || r.phase !== 'playing' || r.turn !== s.id || r.table.length > 0 || r.request) return;
     let from = nextPlayer(r, s.id);
     if (from === s.id) return;

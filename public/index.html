@@ -3,20 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="screen-orientation" content="landscape">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Donkey — Online Cards</title>
   <!-- Direct CDN script to ensure Socket.io loads reliably across all devices and hosting platforms -->
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js">    // Prefer landscape on phones: fullscreen + orientation lock (browsers require a user tap)
-    function goLandscape() {
-      try {
-        if (window.innerWidth > 1000) return;
-        const de = document.documentElement;
-        (de.requestFullscreen ? de.requestFullscreen() : Promise.resolve()).catch(() => {})
-          .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape')).catch(() => {});
-      } catch (e) {}
-    }
-    ['create', 'join'].forEach(id => $(id).addEventListener('click', goLandscape));
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js">    try { $('name').value = localStorage.getItem('donkeyName') || ''; } catch (e) {}
     const qp = new URLSearchParams(location.search).get('room');
     if (qp) $('code').value = qp.toUpperCase().slice(0, 6);
   </script>
@@ -318,23 +308,23 @@
     .bigcode{font-size:34px;font-weight:900;letter-spacing:.2em;color:var(--gold)}
     #highBanner{font-size:14px}
   
-    #rotateMsg{display:none;position:fixed;inset:0;z-index:100;background:#071e19;color:var(--gold);align-items:center;justify-content:center;flex-direction:column;gap:14px;font-size:20px;font-weight:800;text-align:center}
-    #rotateMsg span{font-size:64px;display:inline-block;animation:rot 2s infinite}
-    @keyframes rot{0%,30%{transform:rotate(0)}70%,100%{transform:rotate(-90deg)}}
-    @media (orientation:portrait) and (max-width:700px){#rotateMsg{display:flex}}
-    /* Landscape phones: table, played cards and hand all fit in one screen */
-    @media (orientation:landscape) and (max-height:540px){
-      .app{max-width:none;padding:4px 8px}
-      header.hero,footer,#results:empty{display:none}
-      body.inplay .qrpanel{display:none}
-      .panel{margin:4px 0;padding:6px 10px;border-radius:10px}
-      .panel.hero{padding:4px 10px}
+    #golden{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:80;pointer-events:none;text-align:center;padding:20px;
+      font-size:clamp(24px,7vw,64px);font-weight:900;color:#ffd700;text-shadow:0 0 14px #b8860b,0 3px 6px #000;animation:gpop .4s ease-out}
+    @keyframes gpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+    #requestBox,#surrenderBox,#timeGrantBox,#offerBox,#exitBox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;width:min(420px,92vw);box-shadow:0 10px 40px #000c;text-align:center}
+    .cards .card{touch-action:pan-x}
+    /* Phones, portrait or landscape: table (dealt cards) and hand always share one screen */
+    @media (max-width:700px),(max-height:540px){
+      body.inplay{overflow:hidden}
+      body.inplay .app{height:100dvh;display:flex;flex-direction:column;padding:4px 6px;max-width:none}
+      body.inplay header.hero,body.inplay footer,body.inplay .qrpanel,body.inplay #results{display:none}
+      body.inplay #board{flex:1;min-height:0;display:flex;flex-direction:column}
+      body.inplay #board>.panel{margin:3px 0;padding:5px 8px;border-radius:10px;flex:none}
+      body.inplay .table-container{flex:1;min-height:0;height:auto;padding:34px 6px;margin:0 0 3px;border-radius:18px}
+      body.inplay .table-felt{min-height:0;width:68%;max-height:100%;overflow:auto;padding:6px;gap:6px;border-radius:16px;align-content:center}
+      body.inplay .timer-bar{padding:3px 10px;margin-bottom:3px;font-size:13px;flex:none}
       .status{font-size:12px;min-height:0}
       button{padding:6px 10px;font-size:12px}
-      .timer-bar{padding:3px 10px;margin-bottom:4px;font-size:13px}
-      #highBanner{font-size:12px}
-      .table-container{min-height:0;height:42vh;padding:30px 8px;margin-bottom:4px;border-radius:18px}
-      .table-felt{min-height:0;width:62%;padding:6px;gap:6px;flex-wrap:nowrap;overflow-x:auto;border-radius:16px}
       .seat-badge{font-size:10px;padding:2px 6px;gap:4px}
       .card{width:42px;height:60px;padding:3px;border-radius:6px}
       .rank{font-size:12px}.suit{font-size:17px}
@@ -343,12 +333,15 @@
       .panel:has(#hand) .hero,.panel:has(#hand)>.muted.small{display:none}
       .played-tag{font-size:9px}.high-card-pill{font-size:8px;top:-9px}
       .toggle-label{padding:3px 8px;font-size:11px}
+      #highBanner{font-size:12px;padding:3px 8px;margin-bottom:3px}
     }
   </style>
 </head>
 <body>
-  <div id="rotateMsg"><span>📱</span>Rotate your phone to landscape</div>
-  <div class="app">
+  <div id="golden"></div>
+  <div id="exitBox" class="modal hidden"><p><strong>Leave this room and go back to the lobby?</strong></p><p class="muted small">If a match is running, your seat is played automatically and removed before the next deal.</p><button id="exitYes" class="btn-danger">Leave</button> <button id="exitNo" class="btn-secondary">Stay</button></div>
+  <div id="offerBox" class="modal hidden"></div>
+    <div class="app">
     <header class="hero">
       <div>
         <div class="brand">♠ DONKEY <span>ONLINE</span></div>
@@ -361,7 +354,7 @@
       <h2>Join a table</h2>
       <div class="setup">
         <label class="field">Your name
-          <input id="name" maxlength="24" placeholder="Enter a name" value="Player">
+          <input id="name" maxlength="24" placeholder="Enter your name (required)" value="" autocomplete="nickname">
         </label>
         <label class="field">Deck type
           <select id="deck">
@@ -392,6 +385,7 @@
         </div>
         <div class="bottom">
           <button id="start">Deal & start</button>
+          <button id="exitBtn" class="btn-secondary">Exit room</button>
           <button id="sound">Sound: on</button>
           <button id="callOff" class="btn-danger hidden">Call Off / New Game</button>
         </div>
@@ -423,7 +417,7 @@
         <div class="cards" id="hand"></div>
         
         <div class="bottom" style="margin-top: 10px;">
-          <button id="play">Play selected card</button>
+          <button id="play">Deal selected card</button>
           <button id="clear">Clear</button>
 
           <!-- Auto-Sort Toggle -->
@@ -438,7 +432,7 @@
             <button id="request" class="btn-secondary">Request all cards from next player</button>
           </div>
         </div>
-        <div class="muted small" style="margin-top: 8px;">Drag & drop cards to reorder manually (disables auto-sort). Requesting cards is available only when leading a trick.</div>
+        <div class="muted small" style="margin-top: 8px;">Drag cards to reorder, or drag one onto the table / double-tap it / select it and press Deal.</div>
         <div id="surrenderBox" class="modal hidden"></div>
         <div id="requestBox" class="modal hidden"></div>
         <div id="timeGrantBox" class="modal hidden"></div>
@@ -476,11 +470,12 @@
     const SUIT_ORDER = ['♠', '♥', '♦', '♣'];
     const $ = id => document.getElementById(id);
     function err(t) { $('error').textContent = t || ''; }
-    function name() { return $('name').value.trim().slice(0, 24) || 'Player'; }
+    function name() { return $('name').value.trim().slice(0, 24); }
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
     $('create').onclick = () => {
       err('');
+      if (!needName()) return;
       if (!socket || !socket.connected) {
         err('Connecting to server... Please wait a moment and try again.');
         return;
@@ -490,6 +485,7 @@
 
     $('join').onclick = () => {
       err('');
+      if (!needName()) return;
       if (!socket || !socket.connected) {
         err('Connecting to server... Please wait a moment and try again.');
         return;
@@ -529,8 +525,8 @@
         const ap = state.players.find(p => p.id === state.turn);
         const nm = ap ? (ap.id === me ? 'Your' : ap.name + "'s") : "Player's";
         const secs = state.turnSecondsLeft;
-        $('turnTimerText').textContent = state.opening ? `Ace of Spades auto-plays in ${secs}s` : `${nm} turn: ${secs}s left (${state.turnDuration}s total)`;
-        td.classList.toggle('urgent', secs <= 10);
+        $('turnTimerText').textContent = state.settling ? `Settle up: ${nm} turn timer starts in ${secs}s` : state.opening ? `Ace of Spades auto-plays in ${secs}s` : `${nm} turn: ${secs}s left (${state.turnDuration}s total)`;
+        td.classList.toggle('urgent', secs <= 10 && !state.settling);
       } else td.classList.add('hidden');
     }
     function renderExtras() {
@@ -672,6 +668,7 @@
 
       document.body.classList.toggle('inplay', state.phase === 'playing');
       renderExtras();
+      renderOffer();
       renderSeating();
       renderTable();
       renderHand();
@@ -779,10 +776,18 @@
         `;
 
         card.onclick = () => {
+          const now = Date.now();
+          if (lastTap.id === c.id && now - lastTap.t < 380) { lastTap = {}; playCard(c.id); return; } // double-tap deals
+          lastTap = { id: c.id, t: now };
           if (selected.has(c.id)) selected.delete(c.id);
           else selected.add(c.id);
           render();
         };
+        card.addEventListener('touchstart', e => touchStart(e, c), { passive: true });
+        card.addEventListener('touchmove', touchMove, { passive: false });
+        card.addEventListener('touchend', touchEnd);
+        card.addEventListener('touchcancel', () => { if (tdrag && tdrag.ghost) tdrag.ghost.remove(); tdrag = null; });
+        card.ondragend = () => { draggedCardId = null; };
 
         card.ondragstart = (e) => {
           draggedCardId = c.id;
@@ -859,8 +864,78 @@
       } catch (e) {}
     }
 
+    let lastTap = {}, tdrag = null;
+    function playCard(id) {
+      if (!state || state.phase !== 'playing' || state.turn !== me) return toast('Wait for your turn.');
+      socket.emit('play', { cardId: id }); selected.clear();
+    }
+    function touchStart(e, c) { const t = e.touches[0]; tdrag = { id: c.id, x: t.clientX, y: t.clientY, ghost: null, el: e.currentTarget }; }
+    function touchMove(e) {
+      if (!tdrag) return;
+      const t = e.touches[0], dx = t.clientX - tdrag.x, dy = t.clientY - tdrag.y;
+      if (!tdrag.ghost) {
+        if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
+          const g = tdrag.el.cloneNode(true);
+          g.style.cssText = 'position:fixed;z-index:90;pointer-events:none;opacity:.85;transform:scale(1.15)';
+          document.body.appendChild(g); tdrag.ghost = g;
+        } else return;
+      }
+      e.preventDefault();
+      tdrag.ghost.style.left = (t.clientX - 21) + 'px'; tdrag.ghost.style.top = (t.clientY - 30) + 'px';
+    }
+    function touchEnd(e) {
+      if (!tdrag) return;
+      if (tdrag.ghost) {
+        const t = e.changedTouches[0]; tdrag.ghost.remove();
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && el.closest('#tableContainer')) playCard(tdrag.id);
+      }
+      tdrag = null;
+    }
+    $('tableContainer').ondragover = e => e.preventDefault();
+    $('tableContainer').ondrop = e => { e.preventDefault(); if (draggedCardId) playCard(draggedCardId); draggedCardId = null; };
+    function needName() {
+      const n = name();
+      if (!n) { err('Please enter your name first.'); toast('Name is required'); $('name').focus(); return false; }
+      try { localStorage.setItem('donkeyName', n); } catch (e) {}
+      return true;
+    }
+    socket.on('golden', x => {
+      const g = $('golden'); g.textContent = x.text; g.style.display = 'flex';
+      clearTimeout(g._t); g._t = setTimeout(() => g.style.display = 'none', (x.secs || 3) * 1000);
+    });
+    socket.on('left', () => { location.href = location.pathname; });
+    $('exitBtn').onclick = () => $('exitBox').classList.remove('hidden');
+    $('exitNo').onclick = () => $('exitBox').classList.add('hidden');
+    $('exitYes').onclick = () => { socket.emit('leave'); setTimeout(() => { location.href = location.pathname; }, 400); };
+    let offerDismissed = -1;
+    function renderOffer() {
+      const ob = $('offerBox');
+      if (state.offerReq === me && state.turn === me && !state.request && !state.paused && offerDismissed !== state.round) {
+        ob.classList.remove('hidden');
+        ob.innerHTML = `<h3>Card request</h3><p>You lead next. Ask <strong>${esc(state.offerTo || 'the next player')}</strong> for all their cards?</p>
+          <button id="offYes">Request cards</button> <button id="offNo" class="btn-secondary">No thanks</button>`;
+        $('offYes').onclick = () => { socket.emit('requestCards', {}); offerDismissed = state.round; ob.classList.add('hidden'); };
+        $('offNo').onclick = () => { offerDismissed = state.round; ob.classList.add('hidden'); };
+      } else ob.classList.add('hidden');
+    }
+    function whip() {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const c = audioCtx, t = c.currentTime;
+        const o = c.createOscillator(), og = c.createGain();            // whoosh swing
+        o.type = 'sawtooth'; o.frequency.setValueAtTime(250, t); o.frequency.exponentialRampToValueAtTime(3200, t + 0.11);
+        og.gain.setValueAtTime(0.0001, t); og.gain.linearRampToValueAtTime(0.07, t + 0.08); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+        o.connect(og); og.connect(c.destination); o.start(t); o.stop(t + 0.13);
+        const n = Math.floor(c.sampleRate * 0.22), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 5); // sharp crack
+        const src = c.createBufferSource(), hp = c.createBiquadFilter(), g = c.createGain();
+        src.buffer = buf; hp.type = 'highpass'; hp.frequency.value = 1500; g.gain.value = 0.9;
+        src.connect(hp); hp.connect(g); g.connect(c.destination); src.start(t + 0.1);
+      } catch (e) {}
+    }
     function hitSound() {
-      beep(520, 0.15);
+      whip();
       $('table').classList.remove('hit');
       void $('table').offsetWidth;
       $('table').classList.add('hit');

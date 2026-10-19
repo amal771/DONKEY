@@ -573,8 +573,11 @@
       renderHand();
     });
 
-    function sortLocalHand() {
+    // While a round is in progress, auto-sort puts cards of the lead suit at the front of the hand.
+    const currentLead = () => (state && state.table && state.table.length ? state.leadSuit : null);
+    function sortLocalHand(lead = currentLead()) {
       localHand.sort((a, b) => {
+        if (lead) { const lf = (b.suit === lead) - (a.suit === lead); if (lf !== 0) return lf; }
         let suitDiff = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
         if (suitDiff !== 0) return suitDiff;
         return (b.value - a.value) || (b.pack - a.pack);
@@ -640,7 +643,7 @@
       for (const newCard of serverMap.values()) updated.push(newCard);
       localHand = updated;
 
-      if (autoSort) sortLocalHand();
+      if (autoSort) sortLocalHand(s.table && s.table.length ? s.leadSuit : null);
       render();
     });
 

@@ -22,6 +22,7 @@ const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
 const COLORS = ['#E57373', '#81C784', '#64B5F6', '#FFD54F', '#BA68C8', '#4DB6AC', '#FF8A65', '#A1887F', '#90A4AE', '#4DD0E1',
   '#F06292', '#AED581', '#7986CB', '#DCE775', '#9575CD', '#26A69A', '#FFB74D', '#80CBC4', '#F48FB1', '#CE93D8'];
 const TURN_SECS = 50; // normal turn length (15s if inactive in previous round)
+const SETTLE_SECS = 30; // settle-up time before the first play of every game
 const ACE = '0A♠'; // Ace of Spades from the first pack opens the match
 const rooms = new Map();
 
@@ -61,6 +62,7 @@ function pub(r, viewer) {
     code: r.code, hostId: r.hostId, starterId: r.starterId, gameStarterId: r.starterId, phase: r.phase, paused: r.paused, double: r.double,
     players: r.players.map(p => ({ id: p.id, name: p.name, color: p.color, handCount: p.hand.length, online: p.online,
       inactiveRounds: p.inactiveRounds, wait: p.wait, rank: p.rank })),
+    settling: r.settling, offerReq: r.offerReq, offerTo: r.offerReq ? nextAlive(r, r.offerReq)?.name : null,
     turn: r.turn, turnSecondsLeft: Math.max(0, r.limit - r.elapsed), turnDuration: r.limit, opening: r.opening,
     leadSuit: r.leadSuit, highId: h ? h.card.id : null, highPlayerId: h ? h.playerId : null, reveal: r.reveal,
     table: r.table.map(x => { const p = P(r, x.playerId); return { playerId: x.playerId, name: p?.name, color: p?.color || '#ccc', card: x.card }; }),
@@ -83,12 +85,17 @@ function newPlayer(r, id, name) {
 function setTurn(r, id) {
   const p = P(r, id);
   r.turn = id; r.elapsed = 0; r.granted = false; r.eligible = null;
-  r.limit = r.opening ? 15 : (p && p.inactiveRounds >= 1 ? 15 : TURN_SECS); // 15s if inactive in previous round
+  r.limit = (r.opening || r.settling) ? SETTLE_SECS : (p && p.inactiveRounds >= 1 ? 15 : TURN_SECS); // 15s if inactive in previous round
 }
 
 function tick(r) {
   if (r.phase !== 'playing' || r.paused || r.request || r.reveal || !r.turn) return;
   const p = P(r, r.turn); if (!p) return;
+  if (r.settling) { // >6 players: turn timer only starts after the settle period
+    r.elapsed++; io.to(r.code).emit('tick', { left: Math.max(0, r.limit - r.elapsed), limit: r.limit });
+    if (r.elapsed >= r.limit) { r.settling = false; r.elapsed = 0; r.limit = TURN_SECS; r.notice = `${p.name}'s turn timer has started.`; emit(r); }
+    return;
+  }
   r.elapsed++;
   io.to(r.code).emit('tick', { left: Math.max(0, r.limit - r.elapsed), limit: r.limit });
   const ls = r.leadSuit && r.table.length ? p.hand.filter(c => c.suit === r.leadSuit) : [];
@@ -130,7 +137,7 @@ function play(r, p, cardId, mode) {
   if (r.table.length && card.suit !== r.leadSuit && p.hand.some(c => c.suit === r.leadSuit)) return err('You must follow the lead suit.');
   p.hand.splice(i, 1);
   if (mode === 'manual') { p.inactiveRounds = 0; p.inactNow = false; } else if (mode === 'auto') p.inactNow = true;
-  r.opening = false;
+  r.opening = false; r.settling = false; r.offerReq = null;
   const tag = mode === 'auto' ? ' (auto)' : '';
   if (!r.table.length) {
     r.leadSuit = card.suit; r.lastLead = card.suit;
@@ -152,7 +159,8 @@ function endRound(r, hit, p, card) {
     w.hand.push(...r.table.map(x => x.card)); // winner takes everything, incl. the off-suit HIT card
     r.notice = `HIT! ${p.name} played ${card.rank}${card.suit} off-suit. ${w.name} collects all ${r.table.length} cards.`;
   } else r.notice = `Round won by ${w.name} (${high(r).card.rank}${r.leadSuit}). Cards folded.`;
-  r.reveal = true; r.turn = null;
+  r.reveal = true; r.turn = null; r.lastHit = hit;
+  io.to(r.code).emit('golden', { text: hit ? `HIT! ${w.name} collects ${r.table.length} cards` : `${w.name} wins the round`, secs: 3 });
   const rid = ++r.round;
   setTimeout(() => { if (r.phase === 'playing' && r.round === rid) finishRound(r, w); }, process.env.FAST ? 1 : hit ? 3000 : 2000);
 }
@@ -181,6 +189,7 @@ function finishRound(r, w) {
     if (alive(r).length !== 3) r.surrender = null;
     const lead = w.hand.length ? w : nextAlive(r, w.id);
     setTurn(r, lead.id);
+    r.offerReq = r.lastHit ? null : lead.id; // clean round (no HIT): leader is offered a card request
     r.notice += ` ${lead.name} leads.`;
   }
   emit(r);
@@ -202,15 +211,15 @@ function start(r) {
   s.forEach(p => { p.hand = []; p.inactiveRounds = 0; p.inactNow = false; p.rank = 0; });
   shuffle(deck(r.double)).forEach((c, i) => s[i % s.length].hand.push(c));
   Object.assign(r, { phase: 'playing', paused: false, table: [], order: [], request: null, votes: new Set(), surrender: null, donkey: null,
-    round: 0, finished: 0, leadSuit: null, lastLead: null, reveal: false });
+    round: 0, finished: 0, leadSuit: null, lastLead: null, reveal: false, settling: false, offerReq: null, lastHit: false });
   const holder = s.find(p => p.hand.some(c => c.id === ACE));
   r.starterId = holder.id;
   if (s.length <= 6) {
     r.opening = true; setTurn(r, holder.id);
-    r.notice = `${holder.name} holds the Ace of Spades. It will be played automatically in 15 seconds.`;
+    r.notice = `${holder.name} holds the Ace of Spades. Settle up: it is played automatically in 30 seconds.`;
   } else {
-    r.opening = false; setTurn(r, holder.id);
-    r.notice = `${holder.name} holds the Ace of Spades and chooses the opening card.`;
+    r.opening = false; r.settling = true; r.offerReq = holder.id; setTurn(r, holder.id);
+    r.notice = `${holder.name} holds the Ace of Spades and chooses the opening card. Timer starts after 30 seconds.`;
     io.to(holder.id).emit('starterAlert');
   }
   r.iv = setInterval(() => tick(r), 1000);
@@ -227,13 +236,14 @@ function callOff(r, msg) {
 
 function resolveRequest(r, approve) {
   const q = r.request; if (!q) return;
-  clearTimeout(q.t); r.request = null;
+  clearTimeout(q.t); r.request = null; r.offerReq = null;
   const from = P(r, q.from), to = P(r, q.to);
   if (!from || !to) return emit(r);
   if (approve) {
     const cards = to.hand.splice(0); from.hand.push(...cards);
     io.to(r.code).emit('passed', { from: to.name, to: from.name, count: cards.length, cards: cards.length <= 3 ? cards : null, secs: 8 });
     r.notice = `${to.name} passed ${cards.length} card(s) to ${from.name}.`;
+    io.to(r.code).emit('golden', { text: `${from.name} receives ${cards.length} card${cards.length === 1 ? '' : 's'} from ${to.name}`, secs: 4 });
     if (checkEnd(r, [to.id])) return emit(r);
   } else r.notice = `${to.name} declined the card request.`;
   setTurn(r, from.id);
@@ -244,6 +254,7 @@ io.on('connection', s => {
   const join = (r, name) => { const p = newPlayer(r, s.id, name); p.wait = r.phase === 'playing'; r.players.push(p); s.join(r.code); s.data.room = r.code; return p; };
 
   s.on('create', ({ name, double }) => {
+    if (!String(name || '').trim()) return s.emit('errorMsg', 'Please enter your name.');
     const code = newCode();
     const r = { code, hostId: s.id, starterId: null, players: [], phase: 'lobby', paused: false, double: !!double, turn: null, limit: TURN_SECS, elapsed: 0,
       table: [], order: [], request: null, votes: new Set(), surrender: null, donkey: null, notice: 'Waiting for players to join.', round: 0, finished: 0 };
@@ -252,6 +263,7 @@ io.on('connection', s => {
   });
 
   s.on('join', ({ code, name }) => {
+    if (!String(name || '').trim()) return s.emit('errorMsg', 'Please enter your name.');
     const r = rooms.get(String(code || '').trim().toUpperCase());
     if (!r) return s.emit('errorMsg', 'Room not found. Check the code.');
     if (r.players.length >= 20) return s.emit('errorMsg', 'This table is full (20 players).');
@@ -332,15 +344,18 @@ io.on('connection', s => {
     p.hand = [...out, ...m.values()];
   });
 
-  s.on('disconnect', () => {
+  const drop = () => {
     const r = roomOf(s), p = r && P(r, s.id);
     if (!p) return;
-    p.online = false;
-    if (r.phase !== 'playing') r.players = r.players.filter(x => x !== p);
-    else if (r.request && (r.request.from === p.id || r.request.to === p.id)) resolveRequest(r, false);
+    s.leave(r.code); s.data.room = null;
+    p.online = false; // mid-match the seat is auto-played and pruned at the next deal
+    if (r.phase !== 'playing' || p.wait) r.players = r.players.filter(x => x !== p);
+    if (r.request && (r.request.from === p.id || r.request.to === p.id)) resolveRequest(r, false);
     if (!P(r, r.hostId)?.online) { const h = r.players.find(x => x.online); if (h) r.hostId = h.id; }
     if (!r.players.some(x => x.online)) { clearInterval(r.iv); clearTimeout(r.request?.t); rooms.delete(r.code); } else emit(r);
-  });
+  };
+  s.on('leave', () => { drop(); s.emit('left'); });
+  s.on('disconnect', drop);
 });
 
 const port = process.env.PORT || 3000;

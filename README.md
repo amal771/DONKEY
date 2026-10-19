@@ -26,3 +26,13 @@ Node.js + Express + Socket.IO. Files: `server.js`, `package.json`, `public/index
 
 ## Not done yet
 Reconnect after refresh (a dropped player is marked offline), touch drag-and-drop for reordering, rate limiting, automated tests.
+
+
+## v0.3 additions
+- **Exit room** button with a confirmation popup; returns to the lobby (mid-match the seat is auto-played and pruned at the next deal).
+- Player name is **mandatory** to create/join and is remembered in the browser (blank if none saved). QR codes open `/?room=CODE` with the code pre-filled.
+- **30 s settle-up** before the first play of every game: with 6 or fewer players the Ace auto-plays after 30 s; with more than 6 the starter's 50 s timer starts after 30 s.
+- Deal a card by **dragging it onto the table** (mouse or touch), **double-tapping** it, or **selecting it and pressing Deal**.
+- **Whip-crack** sound on every HIT (synthesised, honours the Sound toggle).
+- Portrait **and** landscape: on phones the table (dealt cards) and your hand always share one screen.
+- **Card-request popup** is offered to the leader at the start (more than 6 players) and after any clean round (no HIT). **Golden-letter banners** announce the round winner, HIT collector, and card-request transfers.

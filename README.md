@@ -43,3 +43,8 @@ Reconnect after refresh (a dropped player is marked offline), touch drag-and-dro
 - **Round messages**: a small white scroll says who starts the next round, or who got HIT and with which card. Golden letters are used only when a player clears all their cards.
 - **Card request**: the popup appears only for the player after the requester. Everyone sees a scroll when the request is made and again when it is approved/declined (cards named if 3 or fewer).
 - **Whip**: when a player is forced to HIT, a "Crack whip on this HIT" toggle appears (remembered, off by default). If it is on, everyone hears the whip when the HIT is played. The master Sound button silences all effects.
+
+## v0.5 changes
+- **QR / join link fixed**: the pre-fill code was sitting inside the `<script src>` tag, so browsers ignored it. Scanning the QR now opens the site with the room code filled in (and the saved name restored). Socket.IO is now served by your own server (`/socket.io/socket.io.js`) instead of a CDN.
+- **"You lost the game"** full-screen message for the last player holding cards (also shown to a player whose surrender was approved).
+- **Dealing**: cards are dealt one at a time with a flick sound per card. Gap between cards: 0.40 s (16), 0.30 s (32), 0.25 s (52), 0.15 s (104). Change `DEAL_GAP_MS` in `server.js`. The 30 s settle period starts after the last card.

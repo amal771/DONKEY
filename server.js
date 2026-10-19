@@ -61,7 +61,7 @@ function nextAlive(r, id) {
 function pub(r, viewer) {
   const me = P(r, viewer), h = r.table.length ? high(r) : null;
   return {
-    code: r.code, hostId: r.hostId, starterId: r.starterId, gameStarterId: r.starterId, phase: r.phase, paused: r.paused, double: r.double, deckSize: r.deckSize,
+    code: r.code, hostId: r.hostId, starterId: r.starterId, gameStarterId: r.starterId, phase: r.phase, paused: r.paused, double: r.double, deckSize: r.deckSize, gameNo: r.deals,
     players: r.players.map(p => ({ id: p.id, name: p.name, color: p.color, handCount: p.hand.length, online: p.online,
       inactiveRounds: p.inactiveRounds, wait: p.wait, rank: p.rank })),
     settling: r.settling,
@@ -214,19 +214,34 @@ function prune(r) {
   if (!P(r, r.hostId) && r.players.length) r.hostId = r.players[0].id;
 }
 
+// Gap between two dealt cards (always under a second). Edit to taste.
+const DEAL_GAP_MS = { 16: 400, 32: 300, 52: 250, 104: 150 };
+
 function start(r) {
   prune(r);
   r.players.forEach(p => p.wait = false); // waiting joiners are seated now
   const s = r.players;
   if (s.length < 2) return note(r, 'Need at least 2 active players to start.');
-  clearInterval(r.iv);
+  clearInterval(r.iv); clearInterval(r.dealIv);
   s.forEach(p => { p.hand = []; p.inactiveRounds = 0; p.inactNow = false; p.rank = 0; });
   const off = (r.deals || 0) % s.length; r.deals = (r.deals || 0) + 1; // game 1: creator first, game 2: next seat, ...
   const cards = shuffle(deck(r.deckSize));
-  cards.forEach((c, i) => s[(i + off) % s.length].hand.push(c));
-  io.to(r.code).emit('dealing', { cards: cards.length });
-  Object.assign(r, { phase: 'playing', paused: false, table: [], order: [], request: null, votes: new Set(), surrender: null, donkey: null,
-    round: 0, finished: 0, leadSuit: null, lastLead: null, reveal: false, settling: false, lastHit: false, hitWhip: false });
+  Object.assign(r, { phase: 'dealing', paused: false, table: [], order: [], request: null, votes: new Set(), surrender: null, donkey: null,
+    round: 0, finished: 0, leadSuit: null, lastLead: null, reveal: false, settling: false, opening: false, turn: null, starterId: null,
+    lastHit: false, hitWhip: false, notice: 'Dealing cards…' });
+  emit(r);
+  let i = 0;
+  r.dealIv = setInterval(() => { // one card at a time, round the table
+    if (rooms.get(r.code) !== r) return clearInterval(r.dealIv);
+    const p = s[(i + off) % s.length];
+    p.hand.push(cards[i++]);
+    io.to(r.code).emit('dealCard', { to: p.id });
+    if (i >= cards.length) { clearInterval(r.dealIv); beginPlay(r, s); } else emit(r);
+  }, process.env.FAST ? 1 : (DEAL_GAP_MS[r.deckSize] || 250));
+}
+
+function beginPlay(r, s) {
+  r.phase = 'playing';
   const holder = s.find(p => p.hand.some(c => c.id === ACE));
   r.starterId = holder.id;
   if (s.length <= 6) {
@@ -265,7 +280,7 @@ function resolveRequest(r, approve) {
 }
 
 io.on('connection', s => {
-  const join = (r, name) => { const p = newPlayer(r, s.id, name); p.wait = r.phase === 'playing'; r.players.push(p); s.join(r.code); s.data.room = r.code; return p; };
+  const join = (r, name) => { const p = newPlayer(r, s.id, name); p.wait = r.phase === 'playing' || r.phase === 'dealing'; r.players.push(p); s.join(r.code); s.data.room = r.code; return p; };
 
   s.on('create', ({ name, deck: dk, double }) => {
     if (!String(name || '').trim()) return s.emit('errorMsg', 'Please enter your name.');
@@ -289,14 +304,14 @@ io.on('connection', s => {
 
   s.on('kick', ({ playerId }) => {
     const r = roomOf(s);
-    if (!r || r.hostId !== s.id || r.phase === 'playing' || playerId === s.id) return;
+    if (!r || r.hostId !== s.id || r.phase === 'playing' || r.phase === 'dealing' || playerId === s.id) return;
     r.players = r.players.filter(p => p.id !== playerId);
     io.to(playerId).emit('kicked', 'You were kicked by the host.');
     io.sockets.sockets.get(playerId)?.leave(r.code);
     emit(r);
   });
 
-  s.on('start', () => { const r = roomOf(s); if (r && r.hostId === s.id && r.phase !== 'playing') start(r); });
+  s.on('start', () => { const r = roomOf(s); if (r && r.hostId === s.id && r.phase !== 'playing' && r.phase !== 'dealing') start(r); });
 
   s.on('play', ({ cardId, whip }) => { const r = roomOf(s), p = r && P(r, s.id); if (p) play(r, p, cardId, 'manual', whip); });
 
@@ -365,10 +380,10 @@ io.on('connection', s => {
     if (!p) return;
     s.leave(r.code); s.data.room = null;
     p.online = false; // mid-match the seat is auto-played and pruned at the next deal
-    if (r.phase !== 'playing' || p.wait) r.players = r.players.filter(x => x !== p);
+    if (!['playing', 'dealing'].includes(r.phase) || p.wait) r.players = r.players.filter(x => x !== p);
     if (r.request && (r.request.from === p.id || r.request.to === p.id)) resolveRequest(r, false);
     if (!P(r, r.hostId)?.online) { const h = r.players.find(x => x.online); if (h) r.hostId = h.id; }
-    if (!r.players.some(x => x.online)) { clearInterval(r.iv); clearTimeout(r.request?.t); rooms.delete(r.code); } else emit(r);
+    if (!r.players.some(x => x.online)) { clearInterval(r.iv); clearInterval(r.dealIv); clearTimeout(r.request?.t); rooms.delete(r.code); } else emit(r);
   };
   s.on('leave', () => { drop(); s.emit('left'); });
   s.on('disconnect', drop);

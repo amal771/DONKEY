@@ -48,3 +48,6 @@ Reconnect after refresh (a dropped player is marked offline), touch drag-and-dro
 - **QR / join link fixed**: the pre-fill code was sitting inside the `<script src>` tag, so browsers ignored it. Scanning the QR now opens the site with the room code filled in (and the saved name restored). Socket.IO is now served by your own server (`/socket.io/socket.io.js`) instead of a CDN.
 - **"You lost the game"** full-screen message for the last player holding cards (also shown to a player whose surrender was approved).
 - **Dealing**: cards are dealt one at a time with a flick sound per card. Gap between cards: 0.40 s (16), 0.30 s (32), 0.25 s (52), 0.15 s (104). Change `DEAL_GAP_MS` in `server.js`. The 30 s settle period starts after the last card.
+
+## v0.6 changes
+- **Auto-sort follows the lead suit**: while a round is in progress, players with Auto-sort on see cards of the lead suit first (highest to lowest), then their other suits. Normal sorting returns when the round ends.

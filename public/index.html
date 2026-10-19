@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Donkey — Online Cards</title>
+  <!-- Direct CDN script to ensure Socket.io loads reliably across all devices and hosting platforms -->
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js">    const qp = new URLSearchParams(location.search).get('room');
+    if (qp) $('code').value = qp.toUpperCase().slice(0, 6);
+  </script>
+  <style>
+    :root {
+      --felt: #0b503f;
+      --felt2: #07392f;
+      --gold: #e5c77a;
+      --neon-green: #39ff14;
+      --ink: #17221e;
+      --red: #e74c3c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #071e19;
+      color: #f4f3e8;
+    }
+    button, input, select { font: inherit; }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--gold);
+      color: #17221e;
+      transition: filter 0.15s ease;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-danger { background: var(--red); color: white; }
+    .btn-secondary { background: #285347; color: white; }
+    .app { max-width: 1200px; margin: auto; padding: 20px; }
+    .hero { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .brand { font-size: 28px; font-weight: 900; letter-spacing: .04em; }
+    .brand span { color: var(--gold); }
+    .panel { background: #102e26; border: 1px solid #285347; border-radius: 16px; padding: 16px; margin: 14px 0; }
+    .setup { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 6px; color: #d4e2da; font-size: 13px; }
+    .field input, .field select { background: #071e19; color: white; border: 1px solid #42665a; border-radius: 9px; padding: 11px; }
+    .muted { color: #a9c2b6; font-size: 13px; }
+    .hidden { display: none !important; }
+
+    /* Center Timer Bar */
+    .timer-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: .03em;
+      background: #09261f;
+      border: 1px solid #2a6152;
+      border-radius: 12px;
+      padding: 8px 16px;
+      margin-bottom: 12px;
+      color: #f7e7ac;
+    }
+    .timer-bar.urgent {
+      color: #ff5252;
+      border-color: #ff5252;
+      animation: pulseUrgent .8s infinite alternate;
+    }
+    @keyframes pulseUrgent {
+      from { transform: scale(1); }
+      to { transform: scale(1.02); }
+    }
+
+    /* Table Seating & Neon Flash Animation */
+    .table-container {
+      position: relative;
+      background: #08261f;
+      border: 3px solid #1c5243;
+      border-radius: 28px;
+      padding: 65px 20px;
+      margin-bottom: 14px;
+      min-height: 460px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      transition: border-color .3s, box-shadow .3s;
+    }
+
+    /* Fluorescent Green Flash 3 Times */
+    .table-container.turn-flash-thrice {
+      animation: flashNeonGreen 1.8s ease-in-out;
+    }
+    @keyframes flashNeonGreen {
+      0%, 100% {
+        border-color: #1c5243;
+        box-shadow: none;
+      }
+      16%, 50%, 84% {
+        border-color: var(--neon-green);
+        box-shadow: 0 0 35px var(--neon-green), inset 0 0 25px rgba(57, 255, 20, 0.4);
+      }
+      33%, 67% {
+        border-color: #1c5243;
+        box-shadow: none;
+      }
+    }
+
+    .seats-ring {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .player-seat {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .seat-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0f2e26;
+      border: 2px solid #285347;
+      border-radius: 20px;
+      padding: 4px 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .seat-badge.active-turn {
+      border-color: var(--neon-green);
+      box-shadow: 0 0 14px var(--neon-green);
+      background: #123d32;
+    }
+    .player-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+    }
+    .kick-btn {
+      background: none;
+      border: none;
+      color: #ff8080;
+      cursor: pointer;
+      padding: 0 3px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .kick-btn:hover { color: #ff3333; }
+    .seat-cards-badge {
+      background: #1e453b;
+      color: var(--gold);
+      border-radius: 12px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .seat-timer-badge {
+      background: #0a1f19;
+      color: var(--neon-green);
+      border: 1px solid var(--neon-green);
+      border-radius: 10px;
+      padding: 1px 6px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    /* Table Felt & Center Trick */
+    .table-felt {
+      width: 68%;
+      min-height: 230px;
+      border-radius: 30px;
+      background: radial-gradient(ellipse at center, var(--felt), var(--felt2));
+      border: 3px solid #1f6954;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 20px;
+      box-shadow: inset 0 0 35px #000a;
+      z-index: 5;
+    }
+    .played {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      position: relative;
+    }
+    .played-tag {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #09201a;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+    }
+    .high-card-pill {
+      position: absolute;
+      top: -12px;
+      background: linear-gradient(135deg, #ffd700, #ff9800);
+      color: #17221e;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 2px 7px;
+      border-radius: 999px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      letter-spacing: .05em;
+      z-index: 2;
+    }
+
+    /* Cards */
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 14px 0;
+      min-height: 105px;
+    }
+    .card {
+      width: 64px;
+      height: 90px;
+      background: #fffdf6;
+      color: #15241d;
+      border-radius: 9px;
+      border: 2px solid #dedbd1;
+      box-shadow: 0 3px 7px #0005;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 6px;
+      cursor: grab;
+      user-select: none;
+      transition: transform .08s, box-shadow .15s;
+    }
+    .card:active { cursor: grabbing; }
+    .card.red { color: #bd263a; }
+    .card.selected {
+      transform: translateY(-12px);
+      border: 3px solid var(--gold);
+      box-shadow: 0 0 0 3px #f6e5a0;
+    }
+    .card.highlighted-high {
+      border: 3px solid #ffcc00 !important;
+      box-shadow: 0 0 16px 4px #ffd700, 0 4px 10px #000;
+      transform: translateY(-4px) scale(1.06);
+    }
+    .card.drag-over {
+      border: 2px dashed var(--gold);
+      transform: scale(1.03);
+    }
+
+    .rank { font-size: 16px; font-weight: 900; line-height: 1; }
+    .suit { font-size: 25px; text-align: center; line-height: 1; }
+    .bottom { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .status { font-size: 14px; color: #f7e7ac; min-height: 22px; }
+    .tag { border: 1px solid #547e6e; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #cde0d5; }
+    .modal { background: #0b241d; border: 1px solid #b9a25c; border-radius: 14px; padding: 14px; margin-top: 12px; }
+    .small { font-size: 12px; }
+    .warn { color: #ffb7a9; margin-top: 6px; }
+    
+    .toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+      background: #09221b;
+      padding: 7px 12px;
+      border-radius: 9px;
+      border: 1px solid #285347;
+    }
+    .toggle-label input { cursor: pointer; accent-color: var(--gold); }
+    .hit { animation: flash .2s ease-out; }
+    @keyframes flash { from { filter: brightness(1.8); } to { filter: brightness(1); } }
+
+    @media (max-width: 760px) {
+      .table-felt { width: 92%; min-height: 180px; }
+      .table-container { padding: 85px 8px; }
+      .card { width: 52px; height: 76px; }
+    }
+  
+    .card{position:relative}
+    .p1{position:absolute;top:3px;right:4px;font-style:normal;font-size:10px;color:#d4a000;text-shadow:0 0 2px #0003}
+    .popup{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:50;background:#0b241d;border:2px solid var(--gold);border-radius:14px;padding:12px 18px;box-shadow:0 8px 30px #000a;text-align:center;max-width:92vw}
+    .popup .cards{justify-content:center;margin:8px 0 0}
+    .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#7a2b22;color:#fff;padding:10px 16px;border-radius:10px;z-index:60}
+    .qrpanel{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+    .qrpanel img{background:#fff;border-radius:8px;padding:4px}
+    .bigcode{font-size:34px;font-weight:900;letter-spacing:.2em;color:var(--gold)}
+    #highBanner{font-size:14px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="hero">
+      <div>
+        <div class="brand">♠ DONKEY <span>ONLINE</span></div>
+        <div class="muted">Multiplayer card table</div>
+      </div>
+      <div id="roomTag" class="tag hidden"></div>
+    </header>
+
+    <section id="lobby" class="panel">
+      <h2>Join a table</h2>
+      <div class="setup">
+        <label class="field">Your name
+          <input id="name" maxlength="24" placeholder="Enter a name" value="Player">
+        </label>
+        <label class="field">Deck type
+          <select id="deck">
+            <option value="single">Single deck (52 cards)</option>
+            <option value="double">Double deck (104 cards)</option>
+          </select>
+        </label>
+        <div class="field">
+          <span>Create a new table</span>
+          <button id="create">Create room</button>
+        </div>
+        <label class="field">Room code
+          <input id="code" maxlength="6" placeholder="e.g. ABC" style="text-transform:uppercase">
+        </label>
+        <div class="field">
+          <span>Join existing table</span>
+          <button id="join">Join room</button>
+        </div>
+      </div>
+      <div id="error" class="warn"></div>
+    </section>
+
+    <section id="board" class="hidden">
+      <div class="panel hero">
+        <div>
+          <div class="tag" id="phaseTag">Lobby</div>
+          <div class="status" id="status">Waiting for players…</div>
+        </div>
+        <div class="bottom">
+          <button id="start">Deal & start</button>
+          <button id="sound">Sound: on</button>
+          <button id="callOff" class="btn-danger hidden">Call Off / New Game</button>
+        </div>
+      </div>
+
+      <!-- Universal Turn Countdown Display -->
+      <div id="turnTimerDisplay" class="timer-bar hidden">
+        <span id="turnTimerIcon">⏳</span>
+        <span id="turnTimerText">Turn Timer: 35s</span>
+      </div>
+
+      <div id="highBanner" class="timer-bar hidden"></div>
+
+      <!-- Oval Table Seating Area with Fluorescent Green Flash -->
+      <div class="table-container" id="tableContainer">
+        <div class="seats-ring" id="seatsRing"></div>
+        <div class="table-felt" id="table">
+          <span class="muted">Cards played this round appear here</span>
+        </div>
+      </div>
+
+      <!-- Hand Management -->
+      <div class="panel">
+        <div class="hero">
+          <h3>Your hand</h3>
+          <span class="muted" id="handCount"></span>
+        </div>
+        
+        <div class="cards" id="hand"></div>
+        
+        <div class="bottom" style="margin-top: 10px;">
+          <button id="play">Play selected card</button>
+          <button id="clear">Clear</button>
+
+          <!-- Auto-Sort Toggle -->
+          <label class="toggle-label">
+            <input type="checkbox" id="autoSortToggle">
+            <span>Auto-sort hand</span>
+          </label>
+
+          <!-- Card Request Option for Trick Starter -->
+          <button id="surrenderBtn" class="btn-secondary hidden" title="Offer surrender"><svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle"><rect x="3" y="2" width="2.2" height="21" rx="1" fill="#8b5a2b"/><path d="M5.2 3Q10 1 14 3T22 3V12Q18 14 14 12T5.2 12Z" fill="#fff"/></svg> Surrender</button>
+          <div id="requestBar" style="display:inline-flex; align-items:center; gap:6px;">
+            <button id="request" class="btn-secondary">Request all cards from next player</button>
+          </div>
+        </div>
+        <div class="muted small" style="margin-top: 8px;">Drag & drop cards to reorder manually (disables auto-sort). Requesting cards is available only when leading a trick.</div>
+        <div id="surrenderBox" class="modal hidden"></div>
+        <div id="requestBox" class="modal hidden"></div>
+        <div id="timeGrantBox" class="modal hidden"></div>
+      </div>
+
+      <div class="panel qrpanel"><img id="qr" alt="Join QR" width="130" height="130"><div><div class="muted">Room code</div><div id="qrCode" class="bigcode"></div><div class="muted small">Scan to join. New players wait until the next match begins.</div><div id="waitList" class="small" style="margin-top:6px"></div></div></div>
+      <div id="results" class="panel hidden"></div>
+
+      <!-- Host Controls -->
+      <div class="panel bottom" style="justify-content: flex-end;">
+        <button id="pauseBtn" class="btn-secondary hidden">Pause Game</button>
+      </div>
+    </section>
+
+    <footer class="muted small">Donkey Online • 35s/15s adaptive timer • Offline/inactive players are pruned before a new deal</footer>
+  </div>
+
+  <script>
+    // Initialize Socket.io client
+    const socket = typeof io !== 'undefined' ? io() : null;
+    if (!socket) {
+      alert("Socket.io failed to load. Please check your internet connection.");
+    }
+
+    let state = null;
+    let me = null;
+    let previousTurn = null;
+    let selected = new Set();
+    let soundOn = true;
+    let audioCtx = null;
+    let autoSort = false;
+    let localHand = [];
+    let draggedCardId = null;
+
+    const SUIT_ORDER = ['♠', '♥', '♦', '♣'];
+    const $ = id => document.getElementById(id);
+    function err(t) { $('error').textContent = t || ''; }
+    function name() { return $('name').value.trim().slice(0, 24) || 'Player'; }
+    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+    $('create').onclick = () => {
+      err('');
+      if (!socket || !socket.connected) {
+        err('Connecting to server... Please wait a moment and try again.');
+        return;
+      }
+      socket.emit('create', { name: name(), double: $('deck').value === 'double' });
+    };
+
+    $('join').onclick = () => {
+      err('');
+      if (!socket || !socket.connected) {
+        err('Connecting to server... Please wait a moment and try again.');
+        return;
+      }
+      socket.emit('join', { name: name(), code: $('code').value });
+    };
+
+    socket.on('created', x => {
+      $('code').value = x.code;
+      $('lobby').classList.add('hidden');$('board').classList.remove('hidden');
+      $('roomTag').classList.remove('hidden');$('roomTag').textContent = 'ROOM ' + x.code;
+      me = socket.id;
+    });
+
+    socket.on('errorMsg', t => { err(t); toast(t); });
+    socket.on('kicked', t => { alert(t); location.href = location.pathname; });
+    socket.on('tick', t => {
+      if (!state) return;
+      state.turnSecondsLeft = t.left; state.turnDuration = t.limit; renderTimer();
+      document.querySelectorAll('.seat-timer-badge').forEach(e => e.textContent = '⏳ ' + t.left + 's');
+    });
+    socket.on('passed', x => {
+      const d = document.createElement('div'); d.className = 'popup';
+      d.innerHTML = `<strong>${esc(x.from)}</strong> gave <strong>${esc(x.to)}</strong> ${x.count} card${x.count === 1 ? '' : 's'}` +
+        (x.cards ? `<div class="cards">${x.cards.map(c => `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : ''}">${face(c)}</div>`).join('')}</div>` : '');
+      document.body.appendChild(d); setTimeout(() => d.remove(), (x.secs || 8) * 1000);
+    });
+    function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3500); }
+    function face(c) {
+      const mark = state && state.double && c.pack === 0 ? '<i class="p1" title="First pack">●</i>' : '';
+      return `${mark}<span class="rank">${c.rank}</span><span class="suit">${c.suit}</span><span class="rank" style="text-align:right">${c.rank}</span>`;
+    }
+    function renderTimer() {
+      const td = $('turnTimerDisplay');
+      if (state.phase === 'playing' && !state.paused && state.turn) {
+        td.classList.remove('hidden');
+        const ap = state.players.find(p => p.id === state.turn);
+        const nm = ap ? (ap.id === me ? 'Your' : ap.name + "'s") : "Player's";
+        const secs = state.turnSecondsLeft;
+        $('turnTimerText').textContent = state.opening ? `Ace of Spades auto-plays in ${secs}s` : `${nm} turn: ${secs}s left (${state.turnDuration}s total)`;
+        td.classList.toggle('urgent', secs <= 10);
+      } else td.classList.add('hidden');
+    }
+    function renderExtras() {
+      const mine = state.players.find(p => p.id === me);
+      if ($('qr').dataset.code !== state.code) { $('qr').src = '/qr/' + state.code; $('qr').dataset.code = state.code; }
+      $('qrCode').textContent = state.code;
+      const w = state.players.filter(p => p.wait);
+      $('waitList').innerHTML = w.length ? '<b>Waiting for next match:</b> ' + w.map(p => esc(p.name)).join(', ') : '';
+      const rs = $('results');
+      if (state.phase === 'finished') {
+        const dk = state.players.find(p => p.id === state.donkey);
+        rs.classList.remove('hidden');
+        rs.innerHTML = '<h3>Results</h3>' + state.players.filter(p => p.rank).sort((a, b) => a.rank - b.rank).map(p =>
+          `<div>${p.rank === 1 ? '🏆' : p.rank + '.'} <span class="player-dot" style="display:inline-block;background:${p.color}"></span> ${esc(p.name)}</div>`).join('') +
+          (dk ? `<div>🫏 <strong>${esc(dk.name)}</strong> is the Donkey</div>` : '');
+      } else rs.classList.add('hidden');
+      const inGame = mine && !mine.wait && mine.handCount > 0 && state.phase === 'playing';
+      $('surrenderBtn').classList.toggle('hidden', !(state.canSurrender && inGame && !state.surrender));
+      const box = $('surrenderBox'), sur = state.surrender;
+      if (sur && inGame && sur.by !== me) {
+        const by = state.players.find(p => p.id === sur.by);
+        box.classList.remove('hidden');
+        box.innerHTML = `<p>🏳 <strong>${esc(by ? by.name : 'A player')}</strong> offers to surrender. Approve?</p><button id="surYes">Approve</button> <button id="surNo" class="btn-secondary">Decline</button>`;
+        $('surYes').onclick = () => socket.emit('respondSurrender', { approve: true });
+        $('surNo').onclick = () => socket.emit('respondSurrender', { approve: false });
+      } else box.classList.add('hidden');
+    }
+    $('surrenderBtn').onclick = () => { if (confirm('Offer to surrender? If approved you become the Donkey.')) socket.emit('surrender'); };
+
+    $('autoSortToggle').addEventListener('change', (e) => {
+      autoSort = e.target.checked;
+      if (autoSort) {
+        sortLocalHand();
+        syncHandOrderToServer();
+      }
+      renderHand();
+    });
+
+    function sortLocalHand() {
+      localHand.sort((a, b) => {
+        let suitDiff = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
+        if (suitDiff !== 0) return suitDiff;
+        return (b.value - a.value) || (b.pack - a.pack);
+      });
+    }
+
+    function syncHandOrderToServer() {
+      if (socket) socket.emit('reorderHand', { cardIds: localHand.map(c => c.id) });
+    }
+
+    socket.on('starterAlert', () => {
+      beep(660, 0.15);
+      setTimeout(() => beep(880, 0.25), 180);
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    });
+
+    socket.on('turnWarning', () => {
+      if (soundOn) {
+        beep(440, 0.1);
+        setTimeout(() => beep(440, 0.1), 180);
+        setTimeout(() => beep(440, 0.15), 360);
+      }
+      if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 200]);
+    });
+
+    socket.on('allowTimePrompt', ({ forPlayer }) => {
+      const box = $('timeGrantBox');
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <p><strong>${esc(forPlayer)}</strong> has 10 seconds remaining! Allow +30s?</p>
+        <button id="approveTimeBtn">Allow 30s</button>
+        <button id="dismissTimeBtn" class="btn-secondary">Dismiss</button>
+      `;
+      $('approveTimeBtn').onclick = () => { socket.emit('grantTime'); box.classList.add('hidden'); };$('dismissTimeBtn').onclick = () => box.classList.add('hidden');
+    });
+
+    socket.on('state', s => {
+      if (state && s.reveal && s.notice && s.notice.startsWith('HIT!') && soundOn) hitSound();
+
+      // Trigger fluorescent green flash 3 times when active turn changes
+      if (s.turn !== previousTurn) {
+        previousTurn = s.turn;
+        // neon flash only for the player whose turn it is
+        if (s.phase === 'playing' && s.turn === socket.id) triggerGreenFlashThrice();
+      }
+
+      state = s;
+      if (!me) me = socket.id;
+
+      $('lobby').classList.add('hidden');$('board').classList.remove('hidden');
+      $('roomTag').classList.remove('hidden');$('roomTag').textContent = 'ROOM ' + s.code;
+
+      const serverHand = s.hand || [];
+      const serverMap = new Map(serverHand.map(c => [c.id, c]));
+
+      let updated = [];
+      for (const card of localHand) {
+        if (serverMap.has(card.id)) {
+          updated.push(serverMap.get(card.id));
+          serverMap.delete(card.id);
+        }
+      }
+      for (const newCard of serverMap.values()) updated.push(newCard);
+      localHand = updated;
+
+      if (autoSort) sortLocalHand();
+      render();
+    });
+
+    function triggerGreenFlashThrice() {
+      const container = $('tableContainer');
+      container.classList.remove('turn-flash-thrice');
+      void container.offsetWidth; // Force CSS reflow to re-trigger
+      container.classList.add('turn-flash-thrice');
+    }
+
+    function render() {
+      if (!state) return;
+      $('phaseTag').textContent = (state.paused ? 'PAUSED • ' : '') + state.phase.toUpperCase() + ' • ' + (state.double ? 'DOUBLE DECK' : 'SINGLE DECK');
+      $('status').textContent = state.notice || '';
+      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing';$('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
+
+      renderTimer();
+
+      const pauseBtn = $('pauseBtn');
+      if (state.hostId === me && state.phase === 'playing') {
+        pauseBtn.classList.remove('hidden');
+        pauseBtn.textContent = state.paused ? 'Resume Game' : 'Pause Game';
+      } else {
+        pauseBtn.classList.add('hidden');
+      }
+
+      const callOffBtn = $('callOff');
+      const mineP = state.players.find(p => p.id === me);
+      if (state.canVote && mineP && !mineP.wait) {
+        callOffBtn.classList.remove('hidden');
+        callOffBtn.textContent = `Request new game (${state.callOffVotes.length}/${state.voteNeed})`;
+      } else callOffBtn.classList.add('hidden');
+
+      renderExtras();
+      renderSeating();
+      renderTable();
+      renderHand();
+
+      $('play').disabled = state.phase !== 'playing' || state.turn !== me || selected.size !== 1 || state.paused || !!state.request || state.reveal;
+      const isLeadTurn = state.phase === 'playing' && state.turn === me && (!state.table || state.table.length === 0) && !state.paused;
+      $('request').disabled = !isLeadTurn || !!state.request || state.opening;
+
+      $('requestBox').classList.toggle('hidden', !state.request || state.request.to !== me);
+      if (state.request && state.request.to === me) renderRequest();
+    }
+
+    function renderSeating() {
+      const container = $('seatsRing');
+      container.innerHTML = '';
+      const players = state.players.filter(p => !p.wait);
+      const count = players.length;
+      if (!count) return;
+
+      const myIndex = Math.max(0, players.findIndex(p => p.id === me));
+
+      players.forEach((p, idx) => {
+        const offsetIndex = (idx - myIndex + count) % count;
+        const angle = (offsetIndex / count) * 2 * Math.PI + Math.PI / 2;
+        const rx = 44, ry = 42, cx = 50, cy = 50;
+        const x = cx + rx * Math.cos(angle);
+        const y = cy + ry * Math.sin(angle);
+
+        const seat = document.createElement('div');
+        seat.className = 'player-seat';
+        seat.style.left = `${x}%`;
+        seat.style.top = `${y}%`;
+
+        const isTurn = p.id === state.turn;
+        const canKick = state.hostId === me && p.id !== me && state.phase !== 'playing';
+
+        seat.innerHTML = `
+          <div class="seat-badge ${isTurn ? 'active-turn' : ''}">
+            <span class="player-dot" style="background-color: ${p.color}"></span>
+            <span>${esc(p.name)} ${p.id === me ? '(You)' : ''}</span>
+            <span class="seat-cards-badge">${p.handCount} 🂠</span>
+            ${p.rank ? `<span class="seat-cards-badge">🏆${p.rank}</span>` : ''}${p.id === state.donkey ? '🫏' : ''}
+            ${isTurn && state.turnSecondsLeft !== undefined ? `<span class="seat-timer-badge">⏳ ${state.turnSecondsLeft}s</span>` : ''}
+            ${!p.online ? '<span class="muted" style="font-size:10px">offline</span>' : ''}
+            ${canKick ? `<button class="kick-btn" onclick="kickPlayer('${p.id}')" title="Kick player">×</button>` : ''}
+          </div>
+        `;
+        container.appendChild(seat);
+      });
+    }
+
+    window.kickPlayer = (id) => {
+      if (confirm('Kick this player?')) socket.emit('kick', { playerId: id });
+    };
+
+    function renderTable() {
+      const tableEl = $('table');
+      tableEl.innerHTML = '';
+
+      if (!state.table || state.table.length === 0) {
+        tableEl.innerHTML = '<span class="muted">Cards played this round appear here</span>';
+        $('highBanner').classList.add('hidden');
+        return;
+      }
+
+      const sortedCards = [...state.table].sort((a, b) => a.card.value - b.card.value || b.card.pack - a.card.pack);
+      const highCardEntry = state.highId ? state.table.find(x => x.card.id === state.highId) : null;
+      const hb = $('highBanner');
+      if (highCardEntry) { hb.classList.remove('hidden'); hb.style.borderColor = highCardEntry.color; hb.innerHTML = `Highest ${esc(state.leadSuit)} card: <span class="player-dot" style="display:inline-block;background:${highCardEntry.color}"></span> <strong style="color:${highCardEntry.color}">${esc(highCardEntry.name || 'Player')}</strong>`; }
+
+      sortedCards.forEach(item => {
+        const isHigh = highCardEntry && highCardEntry.card.id === item.card.id;
+        const isRed = ['♥', '♦'].includes(item.card.suit);
+        const cardBox = document.createElement('div');
+        cardBox.className = 'played';
+        cardBox.innerHTML = `
+          ${isHigh ? '<div class="high-card-pill">HIGH CARD</div>' : ''}
+          <div class="card ${isRed ? 'red' : ''} ${isHigh ? 'highlighted-high' : ''}" style="cursor:default">
+            ${face(item.card)}
+          </div>
+          <div class="played-tag">
+            <span class="player-dot" style="width:8px; height:8px; background:${item.color}"></span>
+            <span>${esc(item.name || 'Player')}</span>
+          </div>
+        `;
+        tableEl.appendChild(cardBox);
+      });
+    }
+
+    function renderHand() {
+      const handEl = $('hand');
+      handEl.innerHTML = '';
+      $('handCount').textContent = localHand.length + ' cards';
+
+      localHand.forEach((c, index) => {
+        const isRed = ['♥', '♦'].includes(c.suit);
+        const isSel = selected.has(c.id);
+
+        const card = document.createElement('div');
+        card.className = `card ${isRed ? 'red ' : ''}${isSel ? 'selected' : ''}`;
+        card.draggable = true;
+
+        card.innerHTML = `
+          ${face(c)}
+        `;
+
+        card.onclick = () => {
+          if (selected.has(c.id)) selected.delete(c.id);
+          else selected.add(c.id);
+          render();
+        };
+
+        card.ondragstart = (e) => {
+          draggedCardId = c.id;
+          e.dataTransfer.effectAllowed = 'move';
+        };
+
+        card.ondragover = (e) => { e.preventDefault(); card.classList.add('drag-over'); };
+        card.ondragleave = () => card.classList.remove('drag-over');
+        card.ondrop = (e) => {
+          e.preventDefault();
+          card.classList.remove('drag-over');
+          if (!draggedCardId || draggedCardId === c.id) return;
+          const fromIdx = localHand.findIndex(x => x.id === draggedCardId);
+          const toIdx = localHand.findIndex(x => x.id === c.id);
+          if (fromIdx < 0 || toIdx < 0) return;
+
+          autoSort = false;
+          $('autoSortToggle').checked = false;
+
+          const [movedCard] = localHand.splice(fromIdx, 1);
+          localHand.splice(toIdx, 0, movedCard);
+
+          renderHand();
+          syncHandOrderToServer();
+        };
+
+        handEl.appendChild(card);
+      });
+    }
+
+    function renderRequest() {
+      let q = state.request, box = $('requestBox');
+      box.innerHTML = `
+        <h3>Card request</h3>
+        <p>${esc(state.players.find(p => p.id === q.from)?.name || 'A player')} requests <strong>all ${q.count} of your cards</strong>. (Auto-declines in 15s)</p>
+        <div class="bottom"><button id="approve">Approve</button><button id="decline" class="btn-secondary">Decline</button></div>`;
+      $('approve').onclick = () => socket.emit('respondRequest', { approve: true });
+      $('decline').onclick = () => socket.emit('respondRequest', { approve: false });
+    }
+
+    $('start').onclick = () => { socket.emit('start'); selected.clear(); };$('play').onclick = () => {
+      let id = [...selected][0];
+      if (id) socket.emit('play', { cardId: id });
+      selected.clear();
+    };
+    $('clear').onclick = () => { selected.clear(); render(); };$('request').onclick = () => socket.emit('requestCards', {});$('sound').onclick = () => {
+      soundOn = !soundOn;
+      $('sound').textContent = 'Sound: ' + (soundOn ? 'on' : 'off');
+    };
+
+    $('pauseBtn').onclick = () => {
+      if (confirm('Are you sure you want to pause/resume the game?')) {
+        socket.emit('togglePause');
+      }
+    };
+
+    $('callOff').onclick = () => {
+      if (confirm('Vote to call off the current game?')) {
+        socket.emit('voteCallOff');
+      }
+    };
+
+    function beep(freq, duration) {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        let osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    function hitSound() {
+      beep(520, 0.15);
+      $('table').classList.remove('hit');
+      void $('table').offsetWidth;
+      $('table').classList.add('hit');
+    }
+  </script>
+</body>
+</html>

@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Donkey — Online Cards</title>
-  <!-- Direct CDN script to ensure Socket.io loads reliably across all devices and hosting platforms -->
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <style>
     :root {
@@ -48,7 +47,6 @@
     .muted { color: #a9c2b6; font-size: 13px; }
     .hidden { display: none !important; }
 
-    /* Center Timer Bar */
     .timer-bar {
       display: flex;
       align-items: center;
@@ -74,7 +72,6 @@
       to { transform: scale(1.02); }
     }
 
-    /* Table Seating & Neon Flash Animation */
     .table-container {
       position: relative;
       background: #08261f;
@@ -90,7 +87,6 @@
       transition: border-color .3s, box-shadow .3s;
     }
 
-    /* Fluorescent Green Flash 3 Times */
     .table-container.turn-flash-thrice {
       animation: flashNeonGreen 1.8s ease-in-out;
     }
@@ -175,7 +171,6 @@
       font-weight: bold;
     }
 
-    /* Table Felt & Center Trick */
     .table-felt {
       width: 68%;
       min-height: 230px;
@@ -222,7 +217,6 @@
       z-index: 2;
     }
 
-    /* Cards */
     .cards {
       display: flex;
       flex-wrap: wrap;
@@ -345,13 +339,11 @@
         </div>
       </div>
 
-      <!-- Universal Turn Countdown Display -->
       <div id="turnTimerDisplay" class="timer-bar hidden">
         <span id="turnTimerIcon">⏳</span>
         <span id="turnTimerText">Turn Timer: 35s</span>
       </div>
 
-      <!-- Oval Table Seating Area with Fluorescent Green Flash -->
       <div class="table-container" id="tableContainer">
         <div class="seats-ring" id="seatsRing"></div>
         <div class="table-felt" id="table">
@@ -359,7 +351,6 @@
         </div>
       </div>
 
-      <!-- Hand Management -->
       <div class="panel">
         <div class="hero">
           <h3>Your hand</h3>
@@ -372,13 +363,11 @@
           <button id="play">Play selected card</button>
           <button id="clear">Clear</button>
 
-          <!-- Auto-Sort Toggle -->
           <label class="toggle-label">
             <input type="checkbox" id="autoSortToggle">
             <span>Auto-sort hand</span>
           </label>
 
-          <!-- Card Request Option for Trick Starter -->
           <div id="requestBar" style="display:inline-flex; align-items:center; gap:6px;">
             <input id="reqCount" type="number" min="1" max="20" value="1" style="width:55px; padding:6px; background:#071e19; color:white; border:1px solid #42665a; border-radius:6px;">
             <button id="request" class="btn-secondary">Request Cards</button>
@@ -389,7 +378,6 @@
         <div id="timeGrantBox" class="modal hidden"></div>
       </div>
 
-      <!-- Host Controls -->
       <div class="panel bottom" style="justify-content: flex-end;">
         <button id="pauseBtn" class="btn-secondary hidden">Pause Game</button>
       </div>
@@ -399,7 +387,6 @@
   </div>
 
   <script>
-    // Initialize Socket.io client
     const socket = typeof io !== 'undefined' ? io() : null;
     if (!socket) {
       alert("Socket.io failed to load. Please check your internet connection.");
@@ -498,7 +485,6 @@
     socket.on('state', s => {
       if (state && s.notice && s.notice.startsWith('HIT!') && soundOn) hitSound();
 
-      // Trigger fluorescent green flash 3 times when active turn changes
       if (s.phase === 'playing' && s.turn && s.turn !== previousTurn) {
         previousTurn = s.turn;
         triggerGreenFlashThrice();
@@ -530,7 +516,7 @@
     function triggerGreenFlashThrice() {
       const container = $('tableContainer');
       container.classList.remove('turn-flash-thrice');
-      void container.offsetWidth; // Force CSS reflow to re-trigger
+      void container.offsetWidth;
       container.classList.add('turn-flash-thrice');
     }
 
@@ -540,7 +526,6 @@
       $('status').textContent = state.notice || '';
       $('start').disabled = state.hostId !== me \vert{}\vert{} state.players.length < 2 \vert{}\vert{} state.phase === 'playing';$('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
 
-      // Turn countdown timer display
       const timerDisplay = $('turnTimerDisplay');
       if (state.phase === 'playing' && !state.paused && state.turn) {
         timerDisplay.classList.remove('hidden');

@@ -4,7 +4,12 @@ const { Server } = require('socket.io');
 const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
 
 app.use(express.static('public'));
 
@@ -187,12 +192,14 @@ function start(r) {
   r.round = 0;
   r.lastLeadSuit = null;
 
+  // Ace of Spades opening rule[cite: 3, 4]
   let aceHolder = r.players.find(p => p.hand.some(c => c.suit === '♠' && c.rank === 'A'));
   if (!aceHolder) aceHolder = r.players[0];
 
   r.gameStarterId = aceHolder.id;
 
   if (r.players.length <= 6) {
+    // 6 or fewer players: Ace of Spades is played automatically[cite: 3, 4]
     let ace = aceHolder.hand.find(c => c.suit === '♠' && c.rank === 'A');
     if (ace) {
       aceHolder.hand.splice(aceHolder.hand.indexOf(ace), 1);
@@ -203,6 +210,7 @@ function start(r) {
       r.notice = `${aceHolder.name} held the Ace of Spades; it is auto-played to start the match!`;
     }
   } else {
+    // More than 6 players: Starter holding Ace of Spades selects a card to lead[cite: 3, 4]
     r.turn = aceHolder.id;
     r.leader = aceHolder.id;
     r.leadSuit = null;
@@ -257,7 +265,7 @@ function setTurnTimer(r) {
   const currentTurnPlayer = r.players.find(p => p.id === r.turn);
   if (!currentTurnPlayer) return;
 
-  // RULE: Continuous inactivity for 2 rounds (inactiveRounds >= 1) means 15s timer; otherwise 35s
+  // If inactive for 2 continuous rounds (inactiveRounds >= 1), drop to 15s; otherwise 35s
   const isContinuousInactive = (currentTurnPlayer.inactiveRounds || 0) >= 1;
   const allottedTime = isContinuousInactive ? 15 : 35;
 
@@ -271,10 +279,8 @@ function setTurnTimer(r) {
     elapsed++;
     r.turnSecondsLeft = Math.max(0, r.turnDuration - elapsed);
 
-    // Broadcast ticking timer to all players
     emit(r);
 
-    // Beep warning at 10 seconds remaining for long turns
     if (r.turnDuration >= 35 && elapsed === 25 && !beepSent) {
       beepSent = true;
       if (currentTurnPlayer.online) {
@@ -293,7 +299,6 @@ function setTurnTimer(r) {
       });
     }
 
-    // Auto-play when time runs out
     if (elapsed >= r.turnDuration) {
       clearRoomTimer(r);
       autoPlayInactiveCard(r, currentTurnPlayer);
@@ -317,7 +322,6 @@ function play(r, p, cardId, isAutomated = false) {
   if (isAutomated) {
     p.wasInactiveThisTurn = true;
   } else {
-    // Player manually played: clear inactive status
     p.wasInactiveThisTurn = false;
     p.inactiveRounds = 0;
   }

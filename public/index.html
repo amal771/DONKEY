@@ -308,6 +308,8 @@
     .bigcode{font-size:34px;font-weight:900;letter-spacing:.2em;color:var(--gold)}
     #highBanner{font-size:14px}
   
+    #scrollMsg{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:75;max-width:88vw;display:none;text-align:center;background:#fff;color:#222;
+      font-size:13px;font-weight:700;padding:6px 18px;border-radius:6px;box-shadow:0 3px 12px #0009;border-left:7px solid #d8d0bb;border-right:7px solid #d8d0bb}
     #golden{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:80;pointer-events:none;text-align:center;padding:20px;
       font-size:clamp(24px,7vw,64px);font-weight:900;color:#ffd700;text-shadow:0 0 14px #b8860b,0 3px 6px #000;animation:gpop .4s ease-out}
     @keyframes gpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
@@ -340,7 +342,7 @@
 <body>
   <div id="golden"></div>
   <div id="exitBox" class="modal hidden"><p><strong>Leave this room and go back to the lobby?</strong></p><p class="muted small">If a match is running, your seat is played automatically and removed before the next deal.</p><button id="exitYes" class="btn-danger">Leave</button> <button id="exitNo" class="btn-secondary">Stay</button></div>
-  <div id="offerBox" class="modal hidden"></div>
+  <div id="scrollMsg"></div>
     <div class="app">
     <header class="hero">
       <div>
@@ -358,8 +360,10 @@
         </label>
         <label class="field">Deck type
           <select id="deck">
-            <option value="single">Single deck (52 cards)</option>
-            <option value="double">Double deck (104 cards)</option>
+            <option value="16">16 cards (Ace to Jack)</option>
+            <option value="32">32 cards (Ace to 7)</option>
+            <option value="52" selected>52 cards (single deck)</option>
+            <option value="104">104 cards (double deck)</option>
           </select>
         </label>
         <div class="field">
@@ -427,6 +431,7 @@
           </label>
 
           <!-- Card Request Option for Trick Starter -->
+          <label id="whipWrap" class="toggle-label hidden"><input type="checkbox" id="whipToggle"> 🪢 Crack whip on this HIT</label>
           <button id="surrenderBtn" class="btn-secondary hidden" title="Offer surrender"><svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle"><rect x="3" y="2" width="2.2" height="21" rx="1" fill="#8b5a2b"/><path d="M5.2 3Q10 1 14 3T22 3V12Q18 14 14 12T5.2 12Z" fill="#fff"/></svg> Surrender</button>
           <div id="requestBar" style="display:inline-flex; align-items:center; gap:6px;">
             <button id="request" class="btn-secondary">Request all cards from next player</button>
@@ -480,7 +485,7 @@
         err('Connecting to server... Please wait a moment and try again.');
         return;
       }
-      socket.emit('create', { name: name(), double: $('deck').value === 'double' });
+      socket.emit('create', { name: name(), deck: +$('deck').value });
     };
 
     $('join').onclick = () => {
@@ -604,7 +609,7 @@
     });
 
     socket.on('state', s => {
-      if (state && s.reveal && s.notice && s.notice.startsWith('HIT!') && soundOn) hitSound();
+      if (state && s.reveal && s.notice && s.notice.startsWith('HIT!')) hitSound();
 
       // Trigger fluorescent green flash 3 times when active turn changes
       if (s.turn !== previousTurn) {
@@ -645,7 +650,7 @@
 
     function render() {
       if (!state) return;
-      $('phaseTag').textContent = (state.paused ? 'PAUSED • ' : '') + state.phase.toUpperCase() + ' • ' + (state.double ? 'DOUBLE DECK' : 'SINGLE DECK');
+      $('phaseTag').textContent = (state.paused ? 'PAUSED • ' : '') + state.phase.toUpperCase() + ' • ' + (state.deckSize || 52) + ' CARDS';
       $('status').textContent = state.notice || '';
       $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing';$('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
 
@@ -668,7 +673,8 @@
 
       document.body.classList.toggle('inplay', state.phase === 'playing');
       renderExtras();
-      renderOffer();
+      const aboutHit = state.phase === 'playing' && state.turn === me && state.table.length > 0 && !!state.leadSuit && !state.hand.some(c => c.suit === state.leadSuit);
+      $('whipWrap').classList.toggle('hidden', !aboutHit);
       renderSeating();
       renderTable();
       renderHand();
@@ -830,7 +836,7 @@
 
     $('start').onclick = () => { socket.emit('start'); selected.clear(); };$('play').onclick = () => {
       let id = [...selected][0];
-      if (id) socket.emit('play', { cardId: id });
+      if (id) socket.emit('play', { cardId: id, whip: whipOn() });
       selected.clear();
     };
     $('clear').onclick = () => { selected.clear(); render(); };$('request').onclick = () => socket.emit('requestCards', {});$('sound').onclick = () => {
@@ -865,9 +871,28 @@
     }
 
     let lastTap = {}, tdrag = null;
+    const whipOn = () => !$('whipWrap').classList.contains('hidden') && $('whipToggle').checked;
+    try { $('whipToggle').checked = localStorage.getItem('donkeyWhip') === '1'; } catch (e) {}
+    $('whipToggle').onchange = () => { try { localStorage.setItem('donkeyWhip', $('whipToggle').checked ? '1' : '0'); } catch (e) {} };
+    socket.on('whip', () => { if (soundOn) whip(); });
+    socket.on('scroll', x => {
+      const d = $('scrollMsg'); d.textContent = x.text; d.style.display = 'block';
+      clearTimeout(d._t); d._t = setTimeout(() => d.style.display = 'none', (x.secs || 4) * 1000);
+    });
+    function flick() { // one card sliding across the table
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const c = audioCtx, t = c.currentTime, n = Math.floor(c.sampleRate * 0.04), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.5);
+        const src = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
+        src.buffer = buf; bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 0.8; g.gain.value = 0.5;
+        src.connect(bp); bp.connect(g); g.connect(c.destination); src.start(t);
+      } catch (e) {}
+    }
+    socket.on('dealing', x => { if (!soundOn) return; const n = Math.min(x.cards, 48); for (let i = 0; i < n; i++) setTimeout(flick, i * 45); });
     function playCard(id) {
       if (!state || state.phase !== 'playing' || state.turn !== me) return toast('Wait for your turn.');
-      socket.emit('play', { cardId: id }); selected.clear();
+      socket.emit('play', { cardId: id, whip: whipOn() }); selected.clear();
     }
     function touchStart(e, c) { const t = e.touches[0]; tdrag = { id: c.id, x: t.clientX, y: t.clientY, ghost: null, el: e.currentTarget }; }
     function touchMove(e) {
@@ -934,8 +959,7 @@
         src.connect(hp); hp.connect(g); g.connect(c.destination); src.start(t + 0.1);
       } catch (e) {}
     }
-    function hitSound() {
-      whip();
+    function hitSound() { // visual flash only; the whip sound is the HIT player's choice
       $('table').classList.remove('hit');
       void $('table').offsetWidth;
       $('table').classList.add('hit');

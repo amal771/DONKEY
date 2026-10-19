@@ -33,10 +33,12 @@ function newCode() { // 3 letters while fewer than 100 rooms are active, else 4
   do { c = Array.from({ length: n }, () => L[Math.floor(Math.random() * 26)]).join(''); } while (rooms.has(c));
   return c;
 }
-const deck = double => {
+// Deck sizes: 16 = A–J, 32 = A–7 (8 ranks x 4), 52 = full pack, 104 = two packs
+const MIN_VALUE = { 16: 11, 32: 7, 52: 2, 104: 2 };
+const deck = size => {
   const d = [];
-  for (let pack = 0; pack < (double ? 2 : 1); pack++)
-    for (const s of SUITS) RANKS.forEach((r, i) => d.push({ id: `${pack}${r}${s}`, suit: s, rank: r, value: i + 2, pack }));
+  for (let pack = 0; pack < (size === 104 ? 2 : 1); pack++)
+    for (const s of SUITS) RANKS.forEach((r, i) => { if (i + 2 >= MIN_VALUE[size]) d.push({ id: `${pack}${r}${s}`, suit: s, rank: r, value: i + 2, pack }); });
   return d;
 };
 const cmp = (a, b) => a.value - b.value || b.pack - a.pack; // equal rank: first pack is higher
@@ -59,10 +61,10 @@ function nextAlive(r, id) {
 function pub(r, viewer) {
   const me = P(r, viewer), h = r.table.length ? high(r) : null;
   return {
-    code: r.code, hostId: r.hostId, starterId: r.starterId, gameStarterId: r.starterId, phase: r.phase, paused: r.paused, double: r.double,
+    code: r.code, hostId: r.hostId, starterId: r.starterId, gameStarterId: r.starterId, phase: r.phase, paused: r.paused, double: r.double, deckSize: r.deckSize,
     players: r.players.map(p => ({ id: p.id, name: p.name, color: p.color, handCount: p.hand.length, online: p.online,
       inactiveRounds: p.inactiveRounds, wait: p.wait, rank: p.rank })),
-    settling: r.settling, offerReq: r.offerReq, offerTo: r.offerReq ? nextAlive(r, r.offerReq)?.name : null,
+    settling: r.settling,
     turn: r.turn, turnSecondsLeft: Math.max(0, r.limit - r.elapsed), turnDuration: r.limit, opening: r.opening,
     leadSuit: r.leadSuit, highId: h ? h.card.id : null, highPlayerId: h ? h.playerId : null, reveal: r.reveal,
     table: r.table.map(x => { const p = P(r, x.playerId); return { playerId: x.playerId, name: p?.name, color: p?.color || '#ccc', card: x.card }; }),
@@ -128,7 +130,7 @@ function auto(r, p, free) {
   play(r, p, (c || hs[0]).id, free ? 'free' : 'auto');
 }
 
-function play(r, p, cardId, mode) {
+function play(r, p, cardId, mode, whip) {
   if (r.phase !== 'playing' || r.turn !== p.id || r.paused || r.request || r.reveal) return false;
   const i = p.hand.findIndex(c => c.id === cardId);
   if (i < 0) return false;
@@ -137,7 +139,7 @@ function play(r, p, cardId, mode) {
   if (r.table.length && card.suit !== r.leadSuit && p.hand.some(c => c.suit === r.leadSuit)) return err('You must follow the lead suit.');
   p.hand.splice(i, 1);
   if (mode === 'manual') { p.inactiveRounds = 0; p.inactNow = false; } else if (mode === 'auto') p.inactNow = true;
-  r.opening = false; r.settling = false; r.offerReq = null;
+  r.opening = false; r.settling = false;
   const tag = mode === 'auto' ? ' (auto)' : '';
   if (!r.table.length) {
     r.leadSuit = card.suit; r.lastLead = card.suit;
@@ -147,6 +149,7 @@ function play(r, p, cardId, mode) {
   } else r.notice = `${p.name} played ${card.rank}${card.suit}${tag}.`;
   r.table.push({ playerId: p.id, card });
   const hit = card.suit !== r.leadSuit;
+  r.hitWhip = hit && !!whip && mode === 'manual'; // player chose to crack the whip on this HIT
   if (hit || r.table.length >= r.order.length) endRound(r, hit, p, card);
   else setTurn(r, r.order[r.table.length]);
   emit(r);
@@ -160,14 +163,24 @@ function endRound(r, hit, p, card) {
     r.notice = `HIT! ${p.name} played ${card.rank}${card.suit} off-suit. ${w.name} collects all ${r.table.length} cards.`;
   } else r.notice = `Round won by ${w.name} (${high(r).card.rank}${r.leadSuit}). Cards folded.`;
   r.reveal = true; r.turn = null; r.lastHit = hit;
-  io.to(r.code).emit('golden', { text: hit ? `HIT! ${w.name} collects ${r.table.length} cards` : `${w.name} wins the round`, secs: 3 });
+  const lead = w.hand.length ? w : nextAlive(r, w.id);
+  const nxt = seated(r).filter(x => x.hand.length).length > 1 && lead ? ` ${lead.name} starts the next round.` : '';
+  io.to(r.code).emit('scroll', { secs: 4, text: hit
+    ? `${w.name} got HIT! ${p.name} played ${card.rank}${card.suit} off-suit.${nxt}`
+    : `${w.name} won the round with ${high(r).card.rank}${r.leadSuit}.${nxt}` });
+  if (hit && r.hitWhip) io.to(r.code).emit('whip');
+  r.hitWhip = false;
   const rid = ++r.round;
   setTimeout(() => { if (r.phase === 'playing' && r.round === rid) finishRound(r, w); }, process.env.FAST ? 1 : hit ? 3000 : 2000);
 }
 
 // Assign finishing ranks to anyone who emptied their hand; end the game when one player remains.
 function checkEnd(r, ids) {
-  for (const id of ids) { const p = P(r, id); if (p && !p.wait && !p.hand.length && !p.rank) p.rank = ++r.finished; }
+  for (const id of ids) { const p = P(r, id); if (p && !p.wait && !p.hand.length && !p.rank) {
+      p.rank = ++r.finished;
+      io.to(r.code).emit('golden', { text: `${p.name} cleared all cards — #${p.rank}`, secs: 4 });
+    }
+  }
   const a = alive(r);
   if (a.length > 1) return false;
   let d = a[0];
@@ -189,7 +202,6 @@ function finishRound(r, w) {
     if (alive(r).length !== 3) r.surrender = null;
     const lead = w.hand.length ? w : nextAlive(r, w.id);
     setTurn(r, lead.id);
-    r.offerReq = r.lastHit ? null : lead.id; // clean round (no HIT): leader is offered a card request
     r.notice += ` ${lead.name} leads.`;
   }
   emit(r);
@@ -209,16 +221,19 @@ function start(r) {
   if (s.length < 2) return note(r, 'Need at least 2 active players to start.');
   clearInterval(r.iv);
   s.forEach(p => { p.hand = []; p.inactiveRounds = 0; p.inactNow = false; p.rank = 0; });
-  shuffle(deck(r.double)).forEach((c, i) => s[i % s.length].hand.push(c));
+  const off = (r.deals || 0) % s.length; r.deals = (r.deals || 0) + 1; // game 1: creator first, game 2: next seat, ...
+  const cards = shuffle(deck(r.deckSize));
+  cards.forEach((c, i) => s[(i + off) % s.length].hand.push(c));
+  io.to(r.code).emit('dealing', { cards: cards.length });
   Object.assign(r, { phase: 'playing', paused: false, table: [], order: [], request: null, votes: new Set(), surrender: null, donkey: null,
-    round: 0, finished: 0, leadSuit: null, lastLead: null, reveal: false, settling: false, offerReq: null, lastHit: false });
+    round: 0, finished: 0, leadSuit: null, lastLead: null, reveal: false, settling: false, lastHit: false, hitWhip: false });
   const holder = s.find(p => p.hand.some(c => c.id === ACE));
   r.starterId = holder.id;
   if (s.length <= 6) {
     r.opening = true; setTurn(r, holder.id);
     r.notice = `${holder.name} holds the Ace of Spades. Settle up: it is played automatically in 30 seconds.`;
   } else {
-    r.opening = false; r.settling = true; r.offerReq = holder.id; setTurn(r, holder.id);
+    r.opening = false; r.settling = true; setTurn(r, holder.id);
     r.notice = `${holder.name} holds the Ace of Spades and chooses the opening card. Timer starts after 30 seconds.`;
     io.to(holder.id).emit('starterAlert');
   }
@@ -236,16 +251,15 @@ function callOff(r, msg) {
 
 function resolveRequest(r, approve) {
   const q = r.request; if (!q) return;
-  clearTimeout(q.t); r.request = null; r.offerReq = null;
+  clearTimeout(q.t); r.request = null;
   const from = P(r, q.from), to = P(r, q.to);
   if (!from || !to) return emit(r);
   if (approve) {
     const cards = to.hand.splice(0); from.hand.push(...cards);
-    io.to(r.code).emit('passed', { from: to.name, to: from.name, count: cards.length, cards: cards.length <= 3 ? cards : null, secs: 8 });
+    io.to(r.code).emit('scroll', { secs: 8, text: `${to.name} gave ${from.name} ${cards.length} card${cards.length === 1 ? '' : 's'}${cards.length <= 3 ? ': ' + cards.map(c => c.rank + c.suit).join(' ') : ''}.` });
     r.notice = `${to.name} passed ${cards.length} card(s) to ${from.name}.`;
-    io.to(r.code).emit('golden', { text: `${from.name} receives ${cards.length} card${cards.length === 1 ? '' : 's'} from ${to.name}`, secs: 4 });
     if (checkEnd(r, [to.id])) return emit(r);
-  } else r.notice = `${to.name} declined the card request.`;
+  } else { r.notice = `${to.name} declined the card request.`; io.to(r.code).emit('scroll', { secs: 4, text: r.notice }); }
   setTurn(r, from.id);
   emit(r);
 }
@@ -253,10 +267,11 @@ function resolveRequest(r, approve) {
 io.on('connection', s => {
   const join = (r, name) => { const p = newPlayer(r, s.id, name); p.wait = r.phase === 'playing'; r.players.push(p); s.join(r.code); s.data.room = r.code; return p; };
 
-  s.on('create', ({ name, double }) => {
+  s.on('create', ({ name, deck: dk, double }) => {
     if (!String(name || '').trim()) return s.emit('errorMsg', 'Please enter your name.');
     const code = newCode();
-    const r = { code, hostId: s.id, starterId: null, players: [], phase: 'lobby', paused: false, double: !!double, turn: null, limit: TURN_SECS, elapsed: 0,
+    const ds = [16, 32, 52, 104].includes(+dk) ? +dk : (double ? 104 : 52);
+    const r = { code, deckSize: ds, deals: 0, hostId: s.id, starterId: null, players: [], phase: 'lobby', paused: false, double: ds === 104, turn: null, limit: TURN_SECS, elapsed: 0,
       table: [], order: [], request: null, votes: new Set(), surrender: null, donkey: null, notice: 'Waiting for players to join.', round: 0, finished: 0 };
     rooms.set(code, r); join(r, name);
     s.emit('created', { code }); emit(r);
@@ -283,7 +298,7 @@ io.on('connection', s => {
 
   s.on('start', () => { const r = roomOf(s); if (r && r.hostId === s.id && r.phase !== 'playing') start(r); });
 
-  s.on('play', ({ cardId }) => { const r = roomOf(s), p = r && P(r, s.id); if (p) play(r, p, cardId, 'manual'); });
+  s.on('play', ({ cardId, whip }) => { const r = roomOf(s), p = r && P(r, s.id); if (p) play(r, p, cardId, 'manual', whip); });
 
   s.on('togglePause', () => {
     const r = roomOf(s);
@@ -302,6 +317,7 @@ io.on('connection', s => {
     if (!r || r.phase !== 'playing' || r.turn !== s.id || r.table.length || r.request || r.paused || r.opening) return;
     const to = nextAlive(r, s.id); if (!to || to.id === s.id) return;
     r.request = { from: s.id, to: to.id, t: setTimeout(() => resolveRequest(r, false), 15000) };
+    io.to(r.code).emit('scroll', { secs: 6, text: `${P(r, s.id).name} requests all cards from ${to.name}.` });
     note(r, `${P(r, s.id).name} asks ${to.name} for all their cards (15s to answer).`);
   });
 

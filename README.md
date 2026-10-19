@@ -36,3 +36,10 @@ Reconnect after refresh (a dropped player is marked offline), touch drag-and-dro
 - **Whip-crack** sound on every HIT (synthesised, honours the Sound toggle).
 - Portrait **and** landscape: on phones the table (dealt cards) and your hand always share one screen.
 - **Card-request popup** is offered to the leader at the start (more than 6 players) and after any clean round (no HIT). **Golden-letter banners** announce the round winner, HIT collector, and card-request transfers.
+
+## v0.4 changes
+- **Deck choices**: 16 (Ace–Jack), 32 (Ace–7, 8 ranks × 4 suits), 52, or 104 cards.
+- **Dealing**: one card at a time with a card-dealing sound. Game 1 starts with the room creator, game 2 with the next seat, and so on.
+- **Round messages**: a small white scroll says who starts the next round, or who got HIT and with which card. Golden letters are used only when a player clears all their cards.
+- **Card request**: the popup appears only for the player after the requester. Everyone sees a scroll when the request is made and again when it is approved/declined (cards named if 3 or fewer).
+- **Whip**: when a player is forced to HIT, a "Crack whip on this HIT" toggle appears (remembered, off by default). If it is on, everyone hears the whip when the HIT is played. The master Sound button silences all effects.

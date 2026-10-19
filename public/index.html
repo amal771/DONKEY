@@ -2,10 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="screen-orientation" content="landscape">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Donkey — Online Cards</title>
   <!-- Direct CDN script to ensure Socket.io loads reliably across all devices and hosting platforms -->
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js">    const qp = new URLSearchParams(location.search).get('room');
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js">    // Prefer landscape on phones: fullscreen + orientation lock (browsers require a user tap)
+    function goLandscape() {
+      try {
+        if (window.innerWidth > 1000) return;
+        const de = document.documentElement;
+        (de.requestFullscreen ? de.requestFullscreen() : Promise.resolve()).catch(() => {})
+          .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape')).catch(() => {});
+      } catch (e) {}
+    }
+    ['create', 'join'].forEach(id => $(id).addEventListener('click', goLandscape));
+    const qp = new URLSearchParams(location.search).get('room');
     if (qp) $('code').value = qp.toUpperCase().slice(0, 6);
   </script>
   <style>
@@ -305,9 +317,37 @@
     .qrpanel img{background:#fff;border-radius:8px;padding:4px}
     .bigcode{font-size:34px;font-weight:900;letter-spacing:.2em;color:var(--gold)}
     #highBanner{font-size:14px}
+  
+    #rotateMsg{display:none;position:fixed;inset:0;z-index:100;background:#071e19;color:var(--gold);align-items:center;justify-content:center;flex-direction:column;gap:14px;font-size:20px;font-weight:800;text-align:center}
+    #rotateMsg span{font-size:64px;display:inline-block;animation:rot 2s infinite}
+    @keyframes rot{0%,30%{transform:rotate(0)}70%,100%{transform:rotate(-90deg)}}
+    @media (orientation:portrait) and (max-width:700px){#rotateMsg{display:flex}}
+    /* Landscape phones: table, played cards and hand all fit in one screen */
+    @media (orientation:landscape) and (max-height:540px){
+      .app{max-width:none;padding:4px 8px}
+      header.hero,footer,#results:empty{display:none}
+      body.inplay .qrpanel{display:none}
+      .panel{margin:4px 0;padding:6px 10px;border-radius:10px}
+      .panel.hero{padding:4px 10px}
+      .status{font-size:12px;min-height:0}
+      button{padding:6px 10px;font-size:12px}
+      .timer-bar{padding:3px 10px;margin-bottom:4px;font-size:13px}
+      #highBanner{font-size:12px}
+      .table-container{min-height:0;height:42vh;padding:30px 8px;margin-bottom:4px;border-radius:18px}
+      .table-felt{min-height:0;width:62%;padding:6px;gap:6px;flex-wrap:nowrap;overflow-x:auto;border-radius:16px}
+      .seat-badge{font-size:10px;padding:2px 6px;gap:4px}
+      .card{width:42px;height:60px;padding:3px;border-radius:6px}
+      .rank{font-size:12px}.suit{font-size:17px}
+      .cards{flex-wrap:nowrap;overflow-x:auto;min-height:0;margin:2px 0;padding-top:12px}
+      .cards .card{flex:0 0 auto}
+      .panel:has(#hand) .hero,.panel:has(#hand)>.muted.small{display:none}
+      .played-tag{font-size:9px}.high-card-pill{font-size:8px;top:-9px}
+      .toggle-label{padding:3px 8px;font-size:11px}
+    }
   </style>
 </head>
 <body>
+  <div id="rotateMsg"><span>📱</span>Rotate your phone to landscape</div>
   <div class="app">
     <header class="hero">
       <div>
@@ -360,7 +400,7 @@
       <!-- Universal Turn Countdown Display -->
       <div id="turnTimerDisplay" class="timer-bar hidden">
         <span id="turnTimerIcon">⏳</span>
-        <span id="turnTimerText">Turn Timer: 35s</span>
+        <span id="turnTimerText">Turn Timer: 50s</span>
       </div>
 
       <div id="highBanner" class="timer-bar hidden"></div>
@@ -413,7 +453,7 @@
       </div>
     </section>
 
-    <footer class="muted small">Donkey Online • 35s/15s adaptive timer • Offline/inactive players are pruned before a new deal</footer>
+    <footer class="muted small">Donkey Online • 50s/15s adaptive timer • Offline/inactive players are pruned before a new deal</footer>
   </div>
 
   <script>
@@ -630,6 +670,7 @@
         callOffBtn.textContent = `Request new game (${state.callOffVotes.length}/${state.voteNeed})`;
       } else callOffBtn.classList.add('hidden');
 
+      document.body.classList.toggle('inplay', state.phase === 'playing');
       renderExtras();
       renderSeating();
       renderTable();

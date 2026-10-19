@@ -10,7 +10,7 @@
       --felt: #0b503f;
       --felt2: #07392f;
       --gold: #e5c77a;
-      --gold-dark: #b8933b;
+      --neon-green: #39ff14;
       --ink: #17221e;
       --red: #e74c3c;
     }
@@ -47,12 +47,38 @@
     .muted { color: #a9c2b6; font-size: 13px; }
     .hidden { display: none !important; }
 
-    /* Table Seating Around the Felt */
+    /* Center Timer Bar */
+    .timer-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: .03em;
+      background: #09261f;
+      border: 1px solid #2a6152;
+      border-radius: 12px;
+      padding: 8px 16px;
+      margin-bottom: 12px;
+      color: #f7e7ac;
+    }
+    .timer-bar.urgent {
+      color: #ff5252;
+      border-color: #ff5252;
+      animation: pulseUrgent .8s infinite alternate;
+    }
+    @keyframes pulseUrgent {
+      from { transform: scale(1); }
+      to { transform: scale(1.02); }
+    }
+
+    /* Table Seating & Neon Flash Animation */
     .table-container {
       position: relative;
       background: #08261f;
-      border: 2px solid #1c5243;
-      border-radius: 24px;
+      border: 3px solid #1c5243;
+      border-radius: 28px;
       padding: 65px 20px;
       margin-bottom: 14px;
       min-height: 460px;
@@ -60,7 +86,28 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      transition: border-color .3s, box-shadow .3s;
     }
+
+    /* Fluorescent Green Flash 3 Times */
+    .table-container.turn-flash-thrice {
+      animation: flashNeonGreen 1.8s ease-in-out;
+    }
+    @keyframes flashNeonGreen {
+      0%, 100% {
+        border-color: #1c5243;
+        box-shadow: none;
+      }
+      16%, 50%, 84% {
+        border-color: var(--neon-green);
+        box-shadow: 0 0 35px var(--neon-green), inset 0 0 25px rgba(57, 255, 20, 0.4);
+      }
+      33%, 67% {
+        border-color: #1c5243;
+        box-shadow: none;
+      }
+    }
+
     .seats-ring {
       position: absolute;
       inset: 0;
@@ -89,14 +136,9 @@
       font-weight: 600;
     }
     .seat-badge.active-turn {
-      border-color: var(--gold);
-      box-shadow: 0 0 14px var(--gold);
-      background: #173f34;
-      animation: pulseTurn 1.4s infinite alternate;
-    }
-    @keyframes pulseTurn {
-      from { transform: scale(1); }
-      to { transform: scale(1.05); }
+      border-color: var(--neon-green);
+      box-shadow: 0 0 14px var(--neon-green);
+      background: #123d32;
     }
     .player-dot {
       width: 14px;
@@ -122,8 +164,17 @@
       font-size: 11px;
       font-weight: bold;
     }
+    .seat-timer-badge {
+      background: #0a1f19;
+      color: var(--neon-green);
+      border: 1px solid var(--neon-green);
+      border-radius: 10px;
+      padding: 1px 6px;
+      font-size: 10px;
+      font-weight: bold;
+    }
 
-    /* Table felt & trick cards */
+    /* Table Felt & Center Trick */
     .table-felt {
       width: 68%;
       min-height: 230px;
@@ -293,15 +344,21 @@
         </div>
       </div>
 
-      <!-- Oval Table Seating Area -->
-      <div class="table-container">
+      <!-- Universal Turn Countdown Display -->
+      <div id="turnTimerDisplay" class="timer-bar hidden">
+        <span id="turnTimerIcon">⏳</span>
+        <span id="turnTimerText">Turn Timer: 35s</span>
+      </div>
+
+      <!-- Oval Table Seating Area with Fluorescent Green Flash -->
+      <div class="table-container" id="tableContainer">
         <div class="seats-ring" id="seatsRing"></div>
         <div class="table-felt" id="table">
           <span class="muted">Cards played this round appear here</span>
         </div>
       </div>
 
-      <!-- Hand Management with Integrated Auto-Sort and Card Request Tool -->
+      <!-- Hand Management -->
       <div class="panel">
         <div class="hero">
           <h3>Your hand</h3>
@@ -314,13 +371,13 @@
           <button id="play">Play selected card</button>
           <button id="clear">Clear</button>
 
-          <!-- Integrated Auto-Sort Toggle -->
+          <!-- Auto-Sort Toggle -->
           <label class="toggle-label">
             <input type="checkbox" id="autoSortToggle">
             <span>Auto-sort hand</span>
           </label>
 
-          <!-- Request option enabled only when starting a round -->
+          <!-- Card Request Option for Trick Starter -->
           <div id="requestBar" style="display:inline-flex; align-items:center; gap:6px;">
             <input id="reqCount" type="number" min="1" max="20" value="1" style="width:55px; padding:6px; background:#071e19; color:white; border:1px solid #42665a; border-radius:6px;">
             <button id="request" class="btn-secondary">Request Cards</button>
@@ -337,13 +394,14 @@
       </div>
     </section>
 
-    <footer class="muted small">Donkey Online • 35s turn limit • Offline/Inactive kick on reset</footer>
+    <footer class="muted small">Donkey Online • 35s/15s adaptive inactivity timer • Offline/Inactive kick on reset</footer>
   </div>
 
   <script>
     const socket = io();
     let state = null;
     let me = null;
+    let previousTurn = null;
     let selected = new Set();
     let soundOn = true;
     let audioCtx = null;
@@ -357,15 +415,13 @@
     function name() { return $('name').value.trim().slice(0, 24) || 'Player'; }
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-    $('create').onclick = () => { err(''); socket.emit('create', { name: name(), double: $('deck').value === 'double' }); };
-    $('join').onclick = () => { err(''); socket.emit('join', { name: name(), code: $('code').value }); };
+    $('create').onclick = () => { err(''); socket.emit('create', { name: name(), double:$('deck').value === 'double' }); };
+    $('join').onclick = () => { err(''); socket.emit('join', { name: name(), code:$('code').value }); };
 
     socket.on('created', x => {
       $('code').value = x.code;
-      $('lobby').classList.add('hidden');
-      $('board').classList.remove('hidden');
-      $('roomTag').classList.remove('hidden');
-      $('roomTag').textContent = 'ROOM ' + x.code;
+      $('lobby').classList.add('hidden');$('board').classList.remove('hidden');
+      $('roomTag').classList.remove('hidden');$('roomTag').textContent = 'ROOM ' + x.code;
       me = socket.id;
     });
 
@@ -411,26 +467,27 @@
       const box = $('timeGrantBox');
       box.classList.remove('hidden');
       box.innerHTML = `
-        <p><strong>${esc(forPlayer)}</strong> is running out of time. Allow +30 seconds?</p>
+        <p><strong>${esc(forPlayer)}</strong> has 10 seconds remaining! Allow +30s?</p>
         <button id="approveTimeBtn">Allow 30s</button>
         <button id="dismissTimeBtn" class="btn-secondary">Dismiss</button>
       `;
-      $('approveTimeBtn').onclick = () => {
-        socket.emit('grantTime');
-        box.classList.add('hidden');
-      };
-      $('dismissTimeBtn').onclick = () => box.classList.add('hidden');
+      $('approveTimeBtn').onclick = () => { socket.emit('grantTime'); box.classList.add('hidden'); };$('dismissTimeBtn').onclick = () => box.classList.add('hidden');
     });
 
     socket.on('state', s => {
       if (state && s.notice && s.notice.startsWith('HIT!') && soundOn) hitSound();
+
+      // Trigger fluorescent green flash 3 times when active turn changes
+      if (s.phase === 'playing' && s.turn && s.turn !== previousTurn) {
+        previousTurn = s.turn;
+        triggerGreenFlashThrice();
+      }
+
       state = s;
       if (!me) me = socket.id;
 
-      $('lobby').classList.add('hidden');
-      $('board').classList.remove('hidden');
-      $('roomTag').classList.remove('hidden');
-      $('roomTag').textContent = 'ROOM ' + s.code;
+      $('lobby').classList.add('hidden');$('board').classList.remove('hidden');
+      $('roomTag').classList.remove('hidden');$('roomTag').textContent = 'ROOM ' + s.code;
 
       const serverHand = s.hand || [];
       const serverMap = new Map(serverHand.map(c => [c.id, c]));
@@ -449,12 +506,32 @@
       render();
     });
 
+    function triggerGreenFlashThrice() {
+      const container = $('tableContainer');
+      container.classList.remove('turn-flash-thrice');
+      void container.offsetWidth; // Force CSS reflow to re-trigger
+      container.classList.add('turn-flash-thrice');
+    }
+
     function render() {
       if (!state) return;
       $('phaseTag').textContent = (state.paused ? 'PAUSED • ' : '') + state.phase.toUpperCase() + ' • ' + (state.double ? 'DOUBLE DECK' : 'SINGLE DECK');
       $('status').textContent = state.notice || '';
-      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing';
-      $('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
+      $('start').disabled = state.hostId !== me \vert{}\vert{} state.players.length < 2 \vert{}\vert{} state.phase === 'playing';$('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
+
+      // Turn countdown timer display
+      const timerDisplay = $('turnTimerDisplay');
+      if (state.phase === 'playing' && !state.paused && state.turn) {
+        timerDisplay.classList.remove('hidden');
+        const activeP = state.players.find(p => p.id === state.turn);
+        const nameStr = activeP ? (activeP.id === me ? 'Your' : `${activeP.name}'s`) : "Player's";
+        const secs = state.turnSecondsLeft !== undefined ? state.turnSecondsLeft : 35;
+        
+        $('turnTimerText').textContent = `${nameStr} Turn: ${secs}s left (${state.turnDuration}s total)`;
+        timerDisplay.classList.toggle('urgent', secs <= 10);
+      } else {
+        timerDisplay.classList.add('hidden');
+      }
 
       const pauseBtn = $('pauseBtn');
       if (state.hostId === me && state.phase === 'playing') {
@@ -516,4 +593,170 @@
         seat.innerHTML = `
           <div class="seat-badge ${isTurn ? 'active-turn' : ''}">
             <span class="player-dot" style="background-color: ${p.color}"></span>
-            <span>${esc(p.name)}${p.id === me ? '(You)' : ''
+            <span>${esc(p.name)} ${p.id === me ? '(You)' : ''}</span>
+            <span class="seat-cards-badge">${p.handCount} 🂠</span>
+            ${isTurn && state.turnSecondsLeft !== undefined ? `<span class="seat-timer-badge">⏳ ${state.turnSecondsLeft}s</span>` : ''}
+            ${!p.online ? '<span class="muted" style="font-size:10px">offline</span>' : ''}
+            ${canKick ? `<button class="kick-btn" onclick="kickPlayer('${p.id}')" title="Kick player">×</button>` : ''}
+          </div>
+        `;
+        container.appendChild(seat);
+      });
+    }
+
+    window.kickPlayer = (id) => {
+      if (confirm('Kick this player?')) socket.emit('kick', { playerId: id });
+    };
+
+    function renderTable() {
+      const tableEl = $('table');
+      tableEl.innerHTML = '';
+
+      if (!state.table || state.table.length === 0) {
+        tableEl.innerHTML = '<span class="muted">Cards played this round appear here</span>';
+        return;
+      }
+
+      const sortedCards = [...state.table].sort((a, b) => a.card.value - b.card.value);
+      let highCardEntry = null;
+      if (state.leadSuit) {
+        const leadCards = state.table
+          .filter(x => x.card.suit === state.leadSuit)
+          .sort((a, b) => (b.card.value - a.card.value) || (a.card.pack - b.card.pack));
+        if (leadCards.length > 0) highCardEntry = leadCards[0];
+      }
+
+      sortedCards.forEach(item => {
+        const isHigh = highCardEntry && highCardEntry.card.id === item.card.id;
+        const isRed = ['♥', '♦'].includes(item.card.suit);
+        const cardBox = document.createElement('div');
+        cardBox.className = 'played';
+        cardBox.innerHTML = `
+          ${isHigh ? '<div class="high-card-pill">HIGH CARD</div>' : ''}
+          <div class="card ${isRed ? 'red' : ''} ${isHigh ? 'highlighted-high' : ''}" style="cursor:default">
+            <span class="rank">${item.card.rank}</span>
+            <span class="suit">${item.card.suit}</span>
+            <span class="rank" style="text-align:right">${item.card.rank}</span>
+          </div>
+          <div class="played-tag">
+            <span class="player-dot" style="width:8px; height:8px; background:${item.color}"></span>
+            <span>${esc(item.name || 'Player')}</span>
+          </div>
+        `;
+        tableEl.appendChild(cardBox);
+      });
+    }
+
+    function renderHand() {
+      const handEl = $('hand');
+      handEl.innerHTML = '';
+      $('handCount').textContent = localHand.length + ' cards';
+
+      localHand.forEach((c, index) => {
+        const isRed = ['♥', '♦'].includes(c.suit);
+        const isSel = selected.has(c.id);
+
+        const card = document.createElement('div');
+        card.className = `card ${isRed ? 'red ' : ''}${isSel ? 'selected' : ''}`;
+        card.draggable = true;
+
+        card.innerHTML = `
+          <span class="rank">${c.rank}</span>
+          <span class="suit">${c.suit}</span>
+          <span class="rank" style="text-align:right">${c.rank}</span>
+        `;
+
+        card.onclick = () => {
+          if (selected.has(c.id)) selected.delete(c.id);
+          else selected.add(c.id);
+          render();
+        };
+
+        card.ondragstart = (e) => {
+          draggedCardId = c.id;
+          e.dataTransfer.effectAllowed = 'move';
+        };
+
+        card.ondragover = (e) => { e.preventDefault(); card.classList.add('drag-over'); };
+        card.ondragleave = () => card.classList.remove('drag-over');
+        card.ondrop = (e) => {
+          e.preventDefault();
+          card.classList.remove('drag-over');
+          if (!draggedCardId || draggedCardId === c.id) return;
+          const fromIdx = localHand.findIndex(x => x.id === draggedCardId);
+          const toIdx = localHand.findIndex(x => x.id === c.id);
+          if (fromIdx < 0 || toIdx < 0) return;
+
+          autoSort = false;
+          $('autoSortToggle').checked = false;
+
+          const [movedCard] = localHand.splice(fromIdx, 1);
+          localHand.splice(toIdx, 0, movedCard);
+
+          renderHand();
+          syncHandOrderToServer();
+        };
+
+        handEl.appendChild(card);
+      });
+    }
+
+    function renderRequest() {
+      let q = state.request, box = $('requestBox');
+      box.innerHTML = `
+        <h3>Card request</h3>
+        <p>${esc(state.players.find(p => p.id === q.from)?.name || 'A player')} requests ${q.count} card(s) from you.</p>
+        <p class="muted">Select up to ${Math.min(q.count, 3)} cards to pass, then approve.</p>
+        <div class="bottom">
+          <button id="approve">Approve & pass selected</button>
+          <button id="decline">Decline</button>
+        </div>
+      `;
+      $('approve').onclick = () => { if (!selected.size) { err('Select cards in your hand to pass first.'); return; } socket.emit('respondRequest', { approve: true, cardIds: [...selected] }); selected.clear(); };$('decline').onclick = () => socket.emit('respondRequest', { approve: false });
+    }
+
+    $('start').onclick = () => { socket.emit('start'); selected.clear(); };$('play').onclick = () => {
+      let id = [...selected][0];
+      if (id) socket.emit('play', { cardId: id });
+      selected.clear();
+    };
+    $('clear').onclick = () => { selected.clear(); render(); };$('request').onclick = () => socket.emit('requestCards', { count: $('reqCount').value });$('sound').onclick = () => {
+      soundOn = !soundOn;
+      $('sound').textContent = 'Sound: ' + (soundOn ? 'on' : 'off');
+    };
+
+    $('pauseBtn').onclick = () => {
+      if (confirm('Are you sure you want to pause/resume the game?')) {
+        socket.emit('togglePause');
+      }
+    };
+
+    $('callOff').onclick = () => {
+      if (confirm('Vote to call off the current game?')) {
+        socket.emit('voteCallOff');
+      }
+    };
+
+    function beep(freq, duration) {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        let osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    function hitSound() {
+      beep(520, 0.15);
+      $('table').classList.remove('hit');
+      void $('table').offsetWidth;
+      $('table').classList.add('hit');
+    }
+  </script>
+</body>
+</html>

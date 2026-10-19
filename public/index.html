@@ -6,10 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <title>Donkey — Online Cards</title>
   <!-- Direct CDN script to ensure Socket.io loads reliably across all devices and hosting platforms -->
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js">    try { $('name').value = localStorage.getItem('donkeyName') || ''; } catch (e) {}
-    const qp = new URLSearchParams(location.search).get('room');
-    if (qp) $('code').value = qp.toUpperCase().slice(0, 6);
-  </script>
+  <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
       --felt: #0b503f;
@@ -343,6 +340,12 @@
   <div id="golden"></div>
   <div id="exitBox" class="modal hidden"><p><strong>Leave this room and go back to the lobby?</strong></p><p class="muted small">If a match is running, your seat is played automatically and removed before the next deal.</p><button id="exitYes" class="btn-danger">Leave</button> <button id="exitNo" class="btn-secondary">Stay</button></div>
   <div id="scrollMsg"></div>
+  <div id="lostBox" style="display:none;position:fixed;inset:0;z-index:95;background:#000d;align-items:center;justify-content:center;flex-direction:column;gap:18px;text-align:center;color:#fff">
+    <div style="font-size:72px">🫏</div>
+    <div style="font-size:clamp(28px,8vw,56px);font-weight:900;color:#ff8a80">You lost the game</div>
+    <div class="muted">You were the last player holding cards.</div>
+    <button id="lostClose">OK</button>
+  </div>
     <div class="app">
     <header class="hero">
       <div>
@@ -652,7 +655,7 @@
       if (!state) return;
       $('phaseTag').textContent = (state.paused ? 'PAUSED • ' : '') + state.phase.toUpperCase() + ' • ' + (state.deckSize || 52) + ' CARDS';
       $('status').textContent = state.notice || '';
-      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing';$('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
+      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing' || state.phase === 'dealing';$('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
 
       renderTimer();
 
@@ -671,7 +674,8 @@
         callOffBtn.textContent = `Request new game (${state.callOffVotes.length}/${state.voteNeed})`;
       } else callOffBtn.classList.add('hidden');
 
-      document.body.classList.toggle('inplay', state.phase === 'playing');
+      document.body.classList.toggle('inplay', state.phase === 'playing' || state.phase === 'dealing');
+      renderLost();
       renderExtras();
       const aboutHit = state.phase === 'playing' && state.turn === me && state.table.length > 0 && !!state.leadSuit && !state.hand.some(c => c.suit === state.leadSuit);
       $('whipWrap').classList.toggle('hidden', !aboutHit);
@@ -889,7 +893,7 @@
         src.connect(bp); bp.connect(g); g.connect(c.destination); src.start(t);
       } catch (e) {}
     }
-    socket.on('dealing', x => { if (!soundOn) return; const n = Math.min(x.cards, 48); for (let i = 0; i < n; i++) setTimeout(flick, i * 45); });
+    
     function playCard(id) {
       if (!state || state.phase !== 'playing' || state.turn !== me) return toast('Wait for your turn.');
       socket.emit('play', { cardId: id, whip: whipOn() }); selected.clear();
@@ -964,6 +968,23 @@
       void $('table').offsetWidth;
       $('table').classList.add('hit');
     }
+      // Remembered name + room code pre-filled from the QR link (?room=CODE)
+    try { $('name').value = localStorage.getItem('donkeyName') || ''; } catch (e) {}
+    const qp = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+    if (qp) {
+      $('code').value = qp;
+      toast(`Room ${qp} filled in — ${$('name').value ? 'tap Join room' : 'enter your name, then tap Join room'}`);
+      if (!$('name').value) $('name').focus();
+    }
+    // "You lost the game" screen for the last player left
+    let lostShown = -1;
+    function renderLost() {
+      const b = $('lostBox');
+      if (state.phase === 'finished' && state.donkey === me && lostShown !== state.gameNo) b.style.display = 'flex';
+      else if (state.phase !== 'finished') b.style.display = 'none';
+    }
+    $('lostClose').onclick = () => { lostShown = state.gameNo; $('lostBox').style.display = 'none'; };
+    socket.on('dealCard', () => { if (soundOn) flick(); });
   </script>
 </body>
 </html>

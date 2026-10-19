@@ -264,7 +264,7 @@
     .tag { border: 1px solid #547e6e; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #cde0d5; }
     .modal { background: #0b241d; border: 1px solid #b9a25c; border-radius: 14px; padding: 14px; margin-top: 12px; }
     .small { font-size: 12px; }
-    .warn { color: #ffb7a9; margin-top: 6px; }
+    .warn { color: #ffb7a9; margin-top: 6px; font-weight: bold; }
     
     .toggle-label {
       display: inline-flex;
@@ -387,10 +387,7 @@
   </div>
 
   <script>
-    const socket = typeof io !== 'undefined' ? io() : null;
-    if (!socket) {
-      alert("Socket.io failed to load. Please check your internet connection.");
-    }
+    const socket = io();
 
     let state = null;
     let me = null;
@@ -410,21 +407,18 @@
 
     $('create').onclick = () => {
       err('');
-      if (!socket || !socket.connected) {
-        err('Connecting to server... Please wait a moment and try again.');
-        return;
-      }
       socket.emit('create', { name: name(), double: $('deck').value === 'double' });
     };
 
     $('join').onclick = () => {
       err('');
-      if (!socket || !socket.connected) {
-        err('Connecting to server... Please wait a moment and try again.');
-        return;
-      }
-      socket.emit('join', { name: name(), code: $('code').value });
+      const codeVal = $('code').value.trim();
+      if (!codeVal) { err('Please enter a room code'); return; }
+      socket.emit('join', { name: name(), code: codeVal });
     };
+
+    socket.on('connect', () => { err(''); });
+    socket.on('connect_error', (e) => { err('Connection failed: ' + e.message); });
 
     socket.on('created', x => {
       $('code').value = x.code;

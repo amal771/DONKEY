@@ -1,14 +1,519 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Donkey — Online Cards</title><script src="/socket.io/socket.io.js"></script><style>
-:root{--felt:#0b503f;--felt2:#07392f;--gold:#e5c77a;--ink:#17221e}*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#071e19;color:#f4f3e8}button,input,select{font:inherit}button{border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;background:var(--gold);color:#17221e}button:disabled{opacity:.45;cursor:not-allowed}.app{max-width:1200px;margin:auto;padding:20px}.hero{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.brand{font-size:28px;font-weight:900;letter-spacing:.04em}.brand span{color:var(--gold)}.panel{background:#102e26;border:1px solid #285347;border-radius:16px;padding:16px;margin:14px 0}.setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:6px;color:#d4e2da;font-size:13px}.field input,.field select{background:#071e19;color:white;border:1px solid #42665a;border-radius:9px;padding:11px}.muted{color:#a9c2b6;font-size:13px}.hidden{display:none!important}.game{display:grid;grid-template-columns:260px 1fr;gap:14px}.players{display:grid;gap:7px}.player{display:flex;justify-content:space-between;gap:6px;padding:8px 10px;background:#0a241e;border-radius:8px;font-size:13px}.player.active{outline:1px solid var(--gold)}.table{min-height:250px;border-radius:18px;background:radial-gradient(ellipse at center,var(--felt),var(--felt2));border:2px solid #1f6954;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;padding:18px;position:relative}.played{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px}.cards{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0;min-height:105px}.card{width:62px;height:88px;background:#fffdf6;color:#15241d;border-radius:9px;border:2px solid #dedbd1;box-shadow:0 3px 7px #0005;display:flex;flex-direction:column;justify-content:space-between;padding:5px;cursor:pointer;user-select:none;transition:transform .08s}.card.red{color:#bd263a}.card.selected{transform:translateY(-10px);border:3px solid var(--gold);box-shadow:0 0 0 2px #f6e5a0}.rank{font-size:16px;font-weight:900;line-height:1}.suit{font-size:25px;text-align:center;line-height:1}.bottom{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.status{font-size:14px;color:#f7e7ac;min-height:22px}.tag{border:1px solid #547e6e;border-radius:999px;padding:4px 9px;font-size:12px;color:#cde0d5}.modal{background:#0b241d;border:1px solid #b9a25c;border-radius:14px;padding:14px;margin-top:12px}.small{font-size:12px}.warn{color:#ffb7a9}.hit{animation:flash .16s ease-out}@keyframes flash{from{filter:brightness(1.7)}to{filter:brightness(1)}}@media(max-width:760px){.game{grid-template-columns:1fr}.table{min-height:170px}.card{width:51px;height:74px}.cards{gap:5px}}
-</style></head><body><div class="app"><header class="hero"><div><div class="brand">♠ DONKEY <span>ONLINE</span></div><div class="muted">A lightweight multiplayer card-table prototype</div></div><div id="roomTag" class="tag hidden"></div></header>
-<section id="lobby" class="panel"><h2>Join a table</h2><div class="setup"><label class="field">Your name<input id="name" maxlength="24" placeholder="Enter a name" value="Player"></label><label class="field">Deck type<select id="deck"><option value="single">Single deck (52 cards)</option><option value="double">Double deck (104 cards)</option></select></label><div class="field"><span>Create a new table</span><button id="create">Create room</button></div><label class="field">Room code<input id="code" maxlength="8" placeholder="e.g. A1B2C3"></label><div class="field"><span>Join existing table</span><button id="join">Join room</button></div></div><p class="muted">Up to 20 players. Share the room code with friends. For online play, run this project on a Node.js host.</p><div id="error" class="warn"></div></section>
-<section id="board" class="hidden"><div class="panel hero"><div><div class="tag" id="phaseTag">Lobby</div><div class="status" id="status">Waiting for players…</div></div><div class="bottom"><button id="start">Deal & start</button><button id="sort">Auto-sort hand</button><button id="sound">Sound: on</button></div></div><div class="game"><aside class="panel"><h3>Players <span class="muted" id="count"></span></h3><div class="players" id="players"></div><div class="muted small" style="margin-top:12px">New players can join during a match and are inserted at a random seat. They join the next deal.</div></aside><main><div class="table" id="table"><span class="muted">Cards played this round appear here</span></div><div class="panel"><div class="hero"><h3>Your hand</h3><span class="muted" id="handCount"></span></div><div class="cards" id="hand"></div><div class="bottom"><button id="play">Play selected card</button><button id="deal">Deal selected (demo)</button><button id="clear">Clear selection</button></div><div class="muted small" style="margin-top:8px">Tap/click a card to select it. “Deal selected” is a selection/sending control for the prototype; the host deals the opening hands.</div><div id="requestBox" class="modal hidden"></div></div><div id="requestTools" class="panel"><h3>Request cards</h3><div class="bottom"><label class="field">Number to request<input id="reqCount" type="number" min="1" max="20" value="1" style="width:100px"></label><button id="request">Request from next player</button></div><div class="muted small">Requests are available only on your turn. The next player must approve and choose cards to pass.</div></div></main></div></section><footer class="muted small">Prototype build • Minimal motion • HIT sound can be toggled • No account required</footer></div>
-<script>
-const socket=io();let state=null,me=null,selected=new Set(),soundOn=true,audioCtx=null;
-const $=id=>document.getElementById(id);function err(t){$('error').textContent=t||''}function name(){return $('name').value.trim().slice(0,24)||'Player'}
-$('create').onclick=()=>{err('');socket.emit('create',{name:name(),double:$('deck').value==='double'})};$('join').onclick=()=>{err('');socket.emit('join',{name:name(),code:$('code').value})};socket.on('created',x=>{$('code').value=x.code;$('lobby').classList.add('hidden');$('board').classList.remove('hidden');$('roomTag').classList.remove('hidden');$('roomTag').textContent='ROOM '+x.code;me=socket.id});socket.on('errorMsg',err);socket.on('state',s=>{state=s;if(!me)me=socket.id;$('lobby').classList.add('hidden');$('board').classList.remove('hidden');$('roomTag').classList.remove('hidden');$('roomTag').textContent='ROOM '+s.code;render()});
-function render(){if(!state)return;$('phaseTag').textContent=state.phase.toUpperCase()+' • '+(state.double?'DOUBLE DECK':'SINGLE DECK');$('status').textContent=state.notice||'';$('count').textContent='('+state.players.length+'/20)';$('start').disabled=state.hostId!==me||state.players.length<2||state.phase==='playing';$('start').textContent=state.phase==='finished'?'New deal':'Deal & start';$('players').innerHTML='';state.players.forEach(p=>{let d=document.createElement('div');d.className='player'+(p.id===state.turn?' active':'');d.innerHTML=`<span>${esc(p.name)} ${p.id===me?'(you)':''} ${p.online?'':' · offline'}</span><b>${p.handCount}</b>`;$('players').appendChild(d)});$('table').innerHTML='';if(!state.table.length)$('table').innerHTML='<span class="muted">Cards played this round appear here</span>';else state.table.forEach(x=>{let d=document.createElement('div');d.className='played';d.innerHTML=`<div class="card ${['♥','♦'].includes(x.card.suit)?'red':''}" style="cursor:default"><span class="rank">${x.card.rank}</span><span class="suit">${x.card.suit}</span><span class="rank" style="text-align:right">${x.card.rank}</span></div><span>${esc(x.name||'Player')}</span>`;$('table').appendChild(d)});$('hand').innerHTML='';$('handCount').textContent=state.hand.length+' cards';state.hand.forEach(c=>{let d=document.createElement('div');d.className='card '+(['♥','♦'].includes(c.suit)?'red ':'')+(selected.has(c.id)?'selected':'');d.innerHTML=`<span class="rank">${c.rank}</span><span class="suit">${c.suit}</span><span class="rank" style="text-align:right">${c.rank}</span>`;d.onclick=()=>{selected.has(c.id)?selected.delete(c.id):selected.add(c.id);render()};$('hand').appendChild(d)});$('play').disabled=state.phase!=='playing'||state.turn!==me||selected.size!==1;$('sort').disabled=state.phase!=='playing';$('request').disabled=state.phase!=='playing'||state.turn!==me||!!state.request;$('requestBox').classList.toggle('hidden',!state.request||state.request.to!==me);if(state.request&&state.request.to===me)renderRequest();}
-function renderRequest(){let q=state.request,box=$('requestBox');box.innerHTML=`<h3>Card request</h3><p>${esc(state.players.find(p=>p.id===q.from)?.name||'A player')} requests ${q.count} card(s) from you.</p><p class="muted">Select up to ${Math.min(q.count,3)} cards to pass, then approve.</p><div class="bottom"><button id="approve">Approve & pass selected</button><button id="decline">Decline</button></div>`;$('approve').onclick=()=>{if(!selected.size){err('Select cards in your hand to pass first.');return}socket.emit('respondRequest',{approve:true,cardIds:[...selected]});selected.clear()};$('decline').onclick=()=>socket.emit('respondRequest',{approve:false})}
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-$('start').onclick=()=>{socket.emit('start');selected.clear()};$('sort').onclick=()=>socket.emit('sort');$('play').onclick=()=>{let id=[...selected][0];if(id)socket.emit('play',{cardId:id});selected.clear()};$('clear').onclick=()=>{selected.clear();render()};$('deal').onclick=()=>{if(selected.size) {err('Selected cards are ready. Opening deal is controlled by the host.');setTimeout(()=>err(''),2200)}else err('Select one or more cards first.')};$('request').onclick=()=>socket.emit('requestCards',{count:$('reqCount').value});$('sound').onclick=()=>{soundOn=!soundOn;$('sound').textContent='Sound: '+(soundOn?'on':'off')};socket.on('state',s=>{if(state&&s.notice&&s.notice.startsWith('HIT!')&&soundOn)hitSound();state=s;if(!me)me=socket.id;render()});function hitSound(){try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();let o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='triangle';o.frequency.setValueAtTime(520,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(180,audioCtx.currentTime+.12);g.gain.setValueAtTime(.12,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.14);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.15);$('table').classList.remove('hit');void $('table').offsetWidth;$('table').classList.add('hit')}catch(e){}}
-</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Donkey — Online Cards</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --felt: #0b503f;
+      --felt2: #07392f;
+      --gold: #e5c77a;
+      --gold-dark: #b8933b;
+      --ink: #17221e;
+      --red: #e74c3c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #071e19;
+      color: #f4f3e8;
+    }
+    button, input, select { font: inherit; }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--gold);
+      color: #17221e;
+      transition: filter 0.15s ease;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-danger { background: var(--red); color: white; }
+    .btn-secondary { background: #285347; color: white; }
+    .app { max-width: 1200px; margin: auto; padding: 20px; }
+    .hero { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .brand { font-size: 28px; font-weight: 900; letter-spacing: .04em; }
+    .brand span { color: var(--gold); }
+    .panel { background: #102e26; border: 1px solid #285347; border-radius: 16px; padding: 16px; margin: 14px 0; }
+    .setup { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 6px; color: #d4e2da; font-size: 13px; }
+    .field input, .field select { background: #071e19; color: white; border: 1px solid #42665a; border-radius: 9px; padding: 11px; }
+    .muted { color: #a9c2b6; font-size: 13px; }
+    .hidden { display: none !important; }
+
+    /* Table Seating Around the Felt */
+    .table-container {
+      position: relative;
+      background: #08261f;
+      border: 2px solid #1c5243;
+      border-radius: 24px;
+      padding: 65px 20px;
+      margin-bottom: 14px;
+      min-height: 460px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .seats-ring {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .player-seat {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .seat-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0f2e26;
+      border: 2px solid #285347;
+      border-radius: 20px;
+      padding: 4px 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .seat-badge.active-turn {
+      border-color: var(--gold);
+      box-shadow: 0 0 14px var(--gold);
+      background: #173f34;
+      animation: pulseTurn 1.4s infinite alternate;
+    }
+    @keyframes pulseTurn {
+      from { transform: scale(1); }
+      to { transform: scale(1.05); }
+    }
+    .player-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+    }
+    .kick-btn {
+      background: none;
+      border: none;
+      color: #ff8080;
+      cursor: pointer;
+      padding: 0 3px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .kick-btn:hover { color: #ff3333; }
+    .seat-cards-badge {
+      background: #1e453b;
+      color: var(--gold);
+      border-radius: 12px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    /* Table felt & trick cards */
+    .table-felt {
+      width: 68%;
+      min-height: 230px;
+      border-radius: 30px;
+      background: radial-gradient(ellipse at center, var(--felt), var(--felt2));
+      border: 3px solid #1f6954;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 20px;
+      box-shadow: inset 0 0 35px #000a;
+      z-index: 5;
+    }
+    .played {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      position: relative;
+    }
+    .played-tag {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #09201a;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+    }
+    .high-card-pill {
+      position: absolute;
+      top: -12px;
+      background: linear-gradient(135deg, #ffd700, #ff9800);
+      color: #17221e;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 2px 7px;
+      border-radius: 999px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      letter-spacing: .05em;
+      z-index: 2;
+    }
+
+    /* Cards */
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 14px 0;
+      min-height: 105px;
+    }
+    .card {
+      width: 64px;
+      height: 90px;
+      background: #fffdf6;
+      color: #15241d;
+      border-radius: 9px;
+      border: 2px solid #dedbd1;
+      box-shadow: 0 3px 7px #0005;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 6px;
+      cursor: grab;
+      user-select: none;
+      transition: transform .08s, box-shadow .15s;
+    }
+    .card:active { cursor: grabbing; }
+    .card.red { color: #bd263a; }
+    .card.selected {
+      transform: translateY(-12px);
+      border: 3px solid var(--gold);
+      box-shadow: 0 0 0 3px #f6e5a0;
+    }
+    .card.highlighted-high {
+      border: 3px solid #ffcc00 !important;
+      box-shadow: 0 0 16px 4px #ffd700, 0 4px 10px #000;
+      transform: translateY(-4px) scale(1.06);
+    }
+    .card.drag-over {
+      border: 2px dashed var(--gold);
+      transform: scale(1.03);
+    }
+
+    .rank { font-size: 16px; font-weight: 900; line-height: 1; }
+    .suit { font-size: 25px; text-align: center; line-height: 1; }
+    .bottom { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .status { font-size: 14px; color: #f7e7ac; min-height: 22px; }
+    .tag { border: 1px solid #547e6e; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #cde0d5; }
+    .modal { background: #0b241d; border: 1px solid #b9a25c; border-radius: 14px; padding: 14px; margin-top: 12px; }
+    .small { font-size: 12px; }
+    .warn { color: #ffb7a9; margin-top: 6px; }
+    
+    .toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+      background: #09221b;
+      padding: 7px 12px;
+      border-radius: 9px;
+      border: 1px solid #285347;
+    }
+    .toggle-label input { cursor: pointer; accent-color: var(--gold); }
+    .hit { animation: flash .2s ease-out; }
+    @keyframes flash { from { filter: brightness(1.8); } to { filter: brightness(1); } }
+
+    @media (max-width: 760px) {
+      .table-felt { width: 92%; min-height: 180px; }
+      .table-container { padding: 85px 8px; }
+      .card { width: 52px; height: 76px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="hero">
+      <div>
+        <div class="brand">♠ DONKEY <span>ONLINE</span></div>
+        <div class="muted">Multiplayer card table</div>
+      </div>
+      <div id="roomTag" class="tag hidden"></div>
+    </header>
+
+    <section id="lobby" class="panel">
+      <h2>Join a table</h2>
+      <div class="setup">
+        <label class="field">Your name
+          <input id="name" maxlength="24" placeholder="Enter a name" value="Player">
+        </label>
+        <label class="field">Deck type
+          <select id="deck">
+            <option value="single">Single deck (52 cards)</option>
+            <option value="double">Double deck (104 cards)</option>
+          </select>
+        </label>
+        <div class="field">
+          <span>Create a new table</span>
+          <button id="create">Create room</button>
+        </div>
+        <label class="field">Room code
+          <input id="code" maxlength="8" placeholder="e.g. A1B2C3">
+        </label>
+        <div class="field">
+          <span>Join existing table</span>
+          <button id="join">Join room</button>
+        </div>
+      </div>
+      <div id="error" class="warn"></div>
+    </section>
+
+    <section id="board" class="hidden">
+      <div class="panel hero">
+        <div>
+          <div class="tag" id="phaseTag">Lobby</div>
+          <div class="status" id="status">Waiting for players…</div>
+        </div>
+        <div class="bottom">
+          <button id="start">Deal & start</button>
+          <button id="sound">Sound: on</button>
+          <button id="callOff" class="btn-danger hidden">Call Off / New Game</button>
+        </div>
+      </div>
+
+      <!-- Oval Table Seating Area -->
+      <div class="table-container">
+        <div class="seats-ring" id="seatsRing"></div>
+        <div class="table-felt" id="table">
+          <span class="muted">Cards played this round appear here</span>
+        </div>
+      </div>
+
+      <!-- Hand Management with Integrated Auto-Sort and Card Request Tool -->
+      <div class="panel">
+        <div class="hero">
+          <h3>Your hand</h3>
+          <span class="muted" id="handCount"></span>
+        </div>
+        
+        <div class="cards" id="hand"></div>
+        
+        <div class="bottom" style="margin-top: 10px;">
+          <button id="play">Play selected card</button>
+          <button id="clear">Clear</button>
+
+          <!-- Integrated Auto-Sort Toggle -->
+          <label class="toggle-label">
+            <input type="checkbox" id="autoSortToggle">
+            <span>Auto-sort hand</span>
+          </label>
+
+          <!-- Request option enabled only when starting a round -->
+          <div id="requestBar" style="display:inline-flex; align-items:center; gap:6px;">
+            <input id="reqCount" type="number" min="1" max="20" value="1" style="width:55px; padding:6px; background:#071e19; color:white; border:1px solid #42665a; border-radius:6px;">
+            <button id="request" class="btn-secondary">Request Cards</button>
+          </div>
+        </div>
+        <div class="muted small" style="margin-top: 8px;">Drag & drop cards to reorder manually (disables auto-sort). Requesting cards is available only when leading a trick.</div>
+        <div id="requestBox" class="modal hidden"></div>
+        <div id="timeGrantBox" class="modal hidden"></div>
+      </div>
+
+      <!-- Host Controls -->
+      <div class="panel bottom" style="justify-content: flex-end;">
+        <button id="pauseBtn" class="btn-secondary hidden">Pause Game</button>
+      </div>
+    </section>
+
+    <footer class="muted small">Donkey Online • 35s turn limit • Offline/Inactive kick on reset</footer>
+  </div>
+
+  <script>
+    const socket = io();
+    let state = null;
+    let me = null;
+    let selected = new Set();
+    let soundOn = true;
+    let audioCtx = null;
+    let autoSort = false;
+    let localHand = [];
+    let draggedCardId = null;
+
+    const SUIT_ORDER = ['♠', '♥', '♦', '♣'];
+    const $ = id => document.getElementById(id);
+    function err(t) { $('error').textContent = t || ''; }
+    function name() { return $('name').value.trim().slice(0, 24) || 'Player'; }
+    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+    $('create').onclick = () => { err(''); socket.emit('create', { name: name(), double: $('deck').value === 'double' }); };
+    $('join').onclick = () => { err(''); socket.emit('join', { name: name(), code: $('code').value }); };
+
+    socket.on('created', x => {
+      $('code').value = x.code;
+      $('lobby').classList.add('hidden');
+      $('board').classList.remove('hidden');
+      $('roomTag').classList.remove('hidden');
+      $('roomTag').textContent = 'ROOM ' + x.code;
+      me = socket.id;
+    });
+
+    socket.on('errorMsg', err);
+
+    $('autoSortToggle').addEventListener('change', (e) => {
+      autoSort = e.target.checked;
+      if (autoSort) {
+        sortLocalHand();
+        syncHandOrderToServer();
+      }
+      renderHand();
+    });
+
+    function sortLocalHand() {
+      localHand.sort((a, b) => {
+        let suitDiff = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
+        if (suitDiff !== 0) return suitDiff;
+        return (b.value - a.value) || (b.pack - a.pack);
+      });
+    }
+
+    function syncHandOrderToServer() {
+      socket.emit('reorderHand', { cardIds: localHand.map(c => c.id) });
+    }
+
+    socket.on('starterAlert', () => {
+      beep(660, 0.15);
+      setTimeout(() => beep(880, 0.25), 180);
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    });
+
+    socket.on('turnWarning', () => {
+      if (soundOn) {
+        beep(440, 0.1);
+        setTimeout(() => beep(440, 0.1), 180);
+        setTimeout(() => beep(440, 0.15), 360);
+      }
+      if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 200]);
+    });
+
+    socket.on('allowTimePrompt', ({ forPlayer }) => {
+      const box = $('timeGrantBox');
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <p><strong>${esc(forPlayer)}</strong> is running out of time. Allow +30 seconds?</p>
+        <button id="approveTimeBtn">Allow 30s</button>
+        <button id="dismissTimeBtn" class="btn-secondary">Dismiss</button>
+      `;
+      $('approveTimeBtn').onclick = () => {
+        socket.emit('grantTime');
+        box.classList.add('hidden');
+      };
+      $('dismissTimeBtn').onclick = () => box.classList.add('hidden');
+    });
+
+    socket.on('state', s => {
+      if (state && s.notice && s.notice.startsWith('HIT!') && soundOn) hitSound();
+      state = s;
+      if (!me) me = socket.id;
+
+      $('lobby').classList.add('hidden');
+      $('board').classList.remove('hidden');
+      $('roomTag').classList.remove('hidden');
+      $('roomTag').textContent = 'ROOM ' + s.code;
+
+      const serverHand = s.hand || [];
+      const serverMap = new Map(serverHand.map(c => [c.id, c]));
+
+      let updated = [];
+      for (const card of localHand) {
+        if (serverMap.has(card.id)) {
+          updated.push(serverMap.get(card.id));
+          serverMap.delete(card.id);
+        }
+      }
+      for (const newCard of serverMap.values()) updated.push(newCard);
+      localHand = updated;
+
+      if (autoSort) sortLocalHand();
+      render();
+    });
+
+    function render() {
+      if (!state) return;
+      $('phaseTag').textContent = (state.paused ? 'PAUSED • ' : '') + state.phase.toUpperCase() + ' • ' + (state.double ? 'DOUBLE DECK' : 'SINGLE DECK');
+      $('status').textContent = state.notice || '';
+      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing';
+      $('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
+
+      const pauseBtn = $('pauseBtn');
+      if (state.hostId === me && state.phase === 'playing') {
+        pauseBtn.classList.remove('hidden');
+        pauseBtn.textContent = state.paused ? 'Resume Game' : 'Pause Game';
+      } else {
+        pauseBtn.classList.add('hidden');
+      }
+
+      const callOffBtn = $('callOff');
+      const hasInactive = state.players.some(p => !p.online || (p.inactiveRounds || 0) >= 2);
+      if (state.phase === 'playing' && hasInactive) {
+        callOffBtn.classList.remove('hidden');
+        if (me === state.gameStarterId && state.players.some(p => (p.inactiveRounds || 0) >= 3 || !p.online)) {
+          callOffBtn.textContent = 'Call Off Match (Starter)';
+        } else {
+          callOffBtn.textContent = 'Vote Call Off (' + (state.callOffVotes?.length || 0) + ')';
+        }
+      } else {
+        callOffBtn.classList.add('hidden');
+      }
+
+      renderSeating();
+      renderTable();
+      renderHand();
+
+      $('play').disabled = state.phase !== 'playing' || state.turn !== me || selected.size !== 1 || state.paused;
+      const isLeadTurn = state.phase === 'playing' && state.turn === me && (!state.table || state.table.length === 0) && !state.paused;
+      $('request').disabled = !isLeadTurn || !!state.request;
+
+      $('requestBox').classList.toggle('hidden', !state.request || state.request.to !== me);
+      if (state.request && state.request.to === me) renderRequest();
+    }
+
+    function renderSeating() {
+      const container = $('seatsRing');
+      container.innerHTML = '';
+      const players = state.players;
+      const count = players.length;
+      if (!count) return;
+
+      const myIndex = Math.max(0, players.findIndex(p => p.id === me));
+
+      players.forEach((p, idx) => {
+        const offsetIndex = (idx - myIndex + count) % count;
+        const angle = (offsetIndex / count) * 2 * Math.PI + Math.PI / 2;
+        const rx = 44, ry = 42, cx = 50, cy = 50;
+        const x = cx + rx * Math.cos(angle);
+        const y = cy + ry * Math.sin(angle);
+
+        const seat = document.createElement('div');
+        seat.className = 'player-seat';
+        seat.style.left = `${x}%`;
+        seat.style.top = `${y}%`;
+
+        const isTurn = p.id === state.turn;
+        const canKick = state.hostId === me && p.id !== me && state.phase !== 'playing';
+
+        seat.innerHTML = `
+          <div class="seat-badge ${isTurn ? 'active-turn' : ''}">
+            <span class="player-dot" style="background-color: ${p.color}"></span>
+            <span>${esc(p.name)}${p.id === me ? '(You)' : ''

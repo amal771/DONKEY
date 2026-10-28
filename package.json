@@ -1,6 +1,6 @@
 {
   "name": "party-blaster",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Party Blaster - Multiplayer Card Game Hub (Rummy 20-Player & Donkey)",
   "main": "server.js",
   "scripts": {

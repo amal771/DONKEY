@@ -61,10 +61,12 @@ io.on('connection', socket => {
     if (!trimmed) return socket.emit('errorMsg', 'Please enter your name.');
 
     const code = generateCode();
+    const gType = (gameType === 'donkey' || gameType === 'rummy') ? gameType : 'rummy';
+
     const room = {
       code,
       hostId: socket.id,
-      gameType: gameType || 'rummy',
+      gameType: gType,
       options: options || {},
       players: [{ id: socket.id, name: trimmed }],
       instance: null
@@ -74,7 +76,7 @@ io.on('connection', socket => {
     socket.join(code);
     socket.data.room = code;
 
-    socket.emit('roomCreated', { code, gameType: room.gameType });
+    socket.emit('roomCreated', { code, gameType: room.gameType, options: room.options });
     broadcastRoomState(room);
   });
 
@@ -90,7 +92,7 @@ io.on('connection', socket => {
     socket.join(room.code);
     socket.data.room = room.code;
 
-    socket.emit('joinedRoom', { code: room.code, gameType: room.gameType });
+    socket.emit('joinedRoom', { code: room.code, gameType: room.gameType, options: room.options });
     broadcastRoomState(room);
   });
 
@@ -167,12 +169,45 @@ io.on('connection', socket => {
     broadcastRoomState(room);
   });
 
+  socket.on('donkeyRequestCards', () => {
+    const room = rooms.get(socket.data.room);
+    if (!room || !room.instance || room.gameType !== 'donkey') return;
+    const res = room.instance.requestCards(socket.id);
+    if (!res.ok) socket.emit('errorMsg', res.msg);
+  });
+
+  socket.on('donkeyRespondRequest', ({ approve }) => {
+    const room = rooms.get(socket.data.room);
+    if (!room || !room.instance || room.gameType !== 'donkey') return;
+    room.instance.resolveRequest(approve);
+  });
+
+  socket.on('donkeySurrender', () => {
+    const room = rooms.get(socket.data.room);
+    if (!room || !room.instance || room.gameType !== 'donkey') return;
+    const res = room.instance.surrender(socket.id);
+    if (!res.ok) socket.emit('errorMsg', res.msg);
+  });
+
+  socket.on('donkeyRespondSurrender', ({ approve }) => {
+    const room = rooms.get(socket.data.room);
+    if (!room || !room.instance || room.gameType !== 'donkey') return;
+    room.instance.respondSurrender(socket.id, approve);
+  });
+
   const handleDisconnect = () => {
     const room = rooms.get(socket.data.room);
     if (!room) return;
 
+    if (room.instance && typeof room.instance.cleanup === 'function') {
+      // If room empties cleanup timers
+    }
+
     room.players = room.players.filter(p => p.id !== socket.id);
     if (room.players.length === 0) {
+      if (room.instance && typeof room.instance.cleanup === 'function') {
+        room.instance.cleanup();
+      }
       rooms.delete(room.code);
     } else {
       if (room.hostId === socket.id) {

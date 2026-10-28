@@ -1,39 +1,23 @@
-# Party Blaster — Multiplayer Game Hub
+# Party Blaster — Multi-Game Portal (Rummy & Donkey)
 
-Party Blaster is a web-based card game portal supporting **20-Player Rummy** and **Donkey Online**.
+Party Blaster is a web-based card game hub that supports **20-Player Rummy** and **Donkey**.
 
-## Features & Game Rules
+## Changes in this update:
+1. **Renamed Game**: Changed "Donkey Online" to **Donkey**.
+2. **Fixed Room Creation Options**: Donkey now has its full room creation options (16, 32, 52, or 104 deck sizes).
+3. **Fixed Game Launching Routing**: Creating or joining a Donkey room opens the genuine Donkey felt table, seating ring, trick tracking, and whip controls instead of defaulting to Rummy.
+4. **Complete Donkey Mechanics Retained**:
+   - Adaptive turn timers (50s / 15s) and 30s Ace of Spades settle-up start.
+   - Lead suit following, high-card highlight, off-suit HIT collection, and whip sound trigger.
+   - Card request modal (ask next player for all cards) and 3-player surrender option.
+5. **Rummy 20-Player Mechanics**:
+   - 3 to 6 decks (auto-scaling to ensure $\ge 52$ closed draw pile cards).
+   - Hidden/Open Joker inspection timers (5s table broadcast, 15s unlocker inspection).
+   - Identical triplets (Sikkan) pure sequences.
+   - First (20 pts) & Middle (40 pts) drops.
+   - Soft invalid declaration popup.
 
-### 1. Universal Fullscreen
-- Integrated Fullscreen API toggle available on desktop and mobile.
-
-### 2. Custom 20-Player Rummy
-- **Deck & Jokers:** Configurable 3 to 6 decks (52 cards each) with 2 or 3 printed jokers per deck. Minimum 52 cards reserved in the closed stock pile.
-- **Pick & Discard Turn Loop:**
-  - Draw from the closed stock pile or open discard pile.
-  - Discarding a card finishes your turn.
-  - If the Joker is **HIDDEN**, players can freely pick the top card of the discard pile (even if it's a joker).
-  - Once the Joker is **OPEN/revealed**, picking an open Joker from the discard pile is blocked.
-- **Drop Option:**
-  - First Drop (before or on 1st turn): **20 points**.
-  - Middle Drop (2nd turn onward): **40 points**.
-- **Identical Triplets (Sikkan):**
-  - Three identical cards of the same rank and suit across separate packs (e.g., 3x 5♣, 3x A♠) count as a valid **Pure Sequence** without Jokers.
-  - No duplicate cards allowed within natural run sequences (e.g., 4s-4s-5s is invalid).
-- **Hidden Joker Reveal & Timers:**
-  - When an active player presents a valid Pure Sequence or Sikkan:
-    - All other players receive a 5-second popup showcasing the cut-joker with an immediate close button.
-    - The unlocking player gets a 15-second inspection window before their turn timer resumes, with an option to close early.
-- **Invalid Declaration:**
-  - A false declaration triggers a warning popup allowing the player to fix combinations or place a card onto the discard pile to continue the game.
-- **Scoring:**
-  - Pure Sequence + Secondary Sequence must total at least 7 cards.
-  - In the absence of a pure sequence, the penalty is capped at **80 points**.
-
-### 3. Donkey Online
-- Shedding trick card game with HIT whip effects, table rotation, and room QR sharing.
-
-## Running Locally
+## Run Locally
 ```bash
 npm install
 npm start

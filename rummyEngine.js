@@ -1,26 +1,6 @@
 /**
  * Party Blaster - Rummy Game Engine
  * 20-Player Custom Indian/Marriage Rummy Variant
- *
- * Updated Rules Implemented:
- * 1. Pick & Discard Turn Loop:
- *    - If the Joker is HIDDEN, taking from the discard pile IS permitted (even if it's a Joker, since its status is unknown to the table).
- *    - If the Joker is OPEN/revealed, picking an open Joker from the discard pile is blocked.
- * 2. Drop Option:
- *    - Available on turn before drawing.
- *    - First Drop (0-1 turns taken): 20 pts.
- *    - Middle Drop (2+ turns taken): 40 pts.
- * 3. Identical Triplets (Sikkan / Sikkans):
- *    - Three identical cards of the same suit and rank from separate packs (e.g., 3x 5♣ or 3x A♠).
- *    - Count as a valid Pure Sequence without Jokers.
- * 4. Hidden Joker Reveal Inspection & Timers:
- *    - When a player unlocks the cut-joker by presenting a valid Pure Sequence (or Sikkan):
- *      a) A popup displaying the cut-joker is shown to EVERYONE for 5 seconds (with an option to close).
- *      b) The unlocking player is granted 15 seconds to view/inspect the Joker before resuming their turn play (with an option to close).
- * 5. Universal Fullscreen & Responsive UI.
- * 6. Minimum 52 cards reserved in stock pile (3-6 decks auto-scaling).
- * 7. Invalid declaration soft-popup with options to fix or discard.
- * 8. Pure + Secondary sequence together >= 7 cards. 80 pts default penalty without pure sequence.
  */
 
 const SUITS = ['♠', '♥', '♦', '♣'];
@@ -67,7 +47,7 @@ class RummyGame {
 
     let requestedDecks = Math.min(Math.max(+options.deckCount || 4, 3), 6);
     this.jokersPerDeck = Math.min(Math.max(+options.jokersPerDeck || 2, 2), 3);
-    this.jokerType = options.jokerType || 'hidden'; // 'hidden' or 'open'
+    this.jokerType = options.jokerType || 'hidden';
 
     const activeCandidates = room.players.slice(0, 20);
     const activeCount = activeCandidates.length;
@@ -105,7 +85,7 @@ class RummyGame {
 
     this.turnIndex = 0;
     this.hasDrawn = false;
-    this.phase = 'playing'; // 'playing' | 'declaring' | 'finished'
+    this.phase = 'playing';
     this.declaringPlayerId = null;
     this.winner = null;
 
@@ -146,7 +126,6 @@ class RummyGame {
     this.turnIndex = nextIdx;
   }
 
-  // Draw Card action
   drawCard(playerId, source = 'stock') {
     if (this.phase !== 'playing') return { ok: false, msg: 'Game not in playing phase.' };
     const p = this.getActivePlayer();
@@ -158,8 +137,8 @@ class RummyGame {
       if (this.discardPile.length === 0) return { ok: false, msg: 'Discard pile is empty.' };
       const topDiscard = this.discardPile[this.discardPile.length - 1];
 
-      // RULE: If Joker is OPEN/revealed, you cannot pick a Joker from the discard pile.
-      // BUT if the Joker is HIDDEN, taking it is PERMITTED (as its wild status is hidden).
+      // If Joker is OPEN/revealed, you cannot pick a Joker from the discard pile.
+      // If the Joker is HIDDEN, taking it is PERMITTED.
       if (this.jokerRevealedToAll && this.isWildJoker(topDiscard)) {
         return { ok: false, msg: 'Cannot pick an open Joker from the discard pile!' };
       }
@@ -176,7 +155,6 @@ class RummyGame {
     return { ok: true, card };
   }
 
-  // Discard Card action
   discardCard(playerId, cardId) {
     if (this.phase === 'declaring' && this.declaringPlayerId === playerId) {
       this.phase = 'playing';
@@ -198,7 +176,6 @@ class RummyGame {
     return { ok: true, discarded };
   }
 
-  // Drop Option (First Drop = 20 pts, Middle Drop = 40 pts)
   dropGame(playerId) {
     if (this.phase !== 'playing') return { ok: false, msg: 'Cannot drop right now.' };
     const p = this.getActivePlayer();
@@ -218,14 +195,11 @@ class RummyGame {
     return { ok: true, dropScore: p.dropScore, playerName: p.name };
   }
 
-  // Identical Triplets (Sikkan / Sikkans) or Pure Natural Sequence
   isValidPureGroup(group) {
     if (!group || group.length < 3) return false;
-
-    // A pure sequence / sikkan cannot have wild or printed jokers
     if (group.some(c => this.isWildJoker(c))) return false;
 
-    // Identical Triplets (Sikkan): 3 identical cards (same suit, same rank from separate packs)
+    // Identical Triplets (Sikkan): 3 identical cards from separate packs
     const first = group[0];
     const isSikkan = group.every(c => c.rank === first.rank && c.suit === first.suit);
     if (isSikkan) {
@@ -233,15 +207,12 @@ class RummyGame {
       if (distinctPacks.size === group.length) return true;
     }
 
-    // Sequence check: all same suit
     const suit = group[0].suit;
     if (!group.every(c => c.suit === suit)) return false;
 
-    // Duplicate cards in suit sequence are forbidden
     const uniqueCards = new Set(group.map(c => `${c.rank}_${c.suit}`));
     if (uniqueCards.size !== group.length) return false;
 
-    // Natural sequence ascending check
     const sorted = [...group].sort((a, b) => a.val - b.val);
     let isRun = true;
     for (let i = 0; i < sorted.length - 1; i++) {
@@ -252,7 +223,6 @@ class RummyGame {
     }
     if (isRun) return true;
 
-    // Ace-low check (A-2-3...)
     if (sorted.some(c => c.rank === 'A')) {
       const aceLow = sorted.map(c => c.rank === 'A' ? { ...c, val: 1 } : c).sort((a, b) => a.val - b.val);
       let isAceLowRun = true;
@@ -317,7 +287,6 @@ class RummyGame {
     return this.isValidPureGroup(group) || this.isValidSecondarySequence(group) || this.isValidSet(group);
   }
 
-  // Present Pure Sequence or Sikkan to unlock Joker
   revealPureSequence(playerId, groupCardIds) {
     const p = this.players.find(x => x.id === playerId);
     if (!p) return { ok: false, msg: 'Player not found.' };
@@ -337,9 +306,6 @@ class RummyGame {
         this.jokerRevealedToAll = true;
       }
 
-      // Broadcast inspection timers:
-      // 1. All players get a 5-second broadcast modal with an option to close.
-      // 2. The unlocking player gets a 15-second inspection window before resuming play.
       this.io.to(this.room.code).emit('jokerInspectionBroadcast', {
         unlockedBy: p.name,
         cutJoker: this.cutJoker,
@@ -360,7 +326,6 @@ class RummyGame {
     return { ok: false, msg: 'Invalid Pure Sequence / Sikkan. Cannot contain Jokers or duplicate cards.' };
   }
 
-  // Declaration
   declareShow(playerId, groups, discardCardId) {
     const p = this.getActivePlayer();
     if (!p || p.id !== playerId) return { ok: false, msg: 'Not your turn to declare.' };
@@ -396,7 +361,6 @@ class RummyGame {
       };
     }
 
-    // Valid declaration
     const dIdx = p.hand.findIndex(c => c.id === discardCardId);
     if (dIdx >= 0) {
       this.discardPile.push(p.hand.splice(dIdx, 1)[0]);
@@ -457,6 +421,7 @@ class RummyGame {
     const canSeeJoker = this.jokerRevealedToAll || (me && me.hasPure && this.playersWhoSawJoker.has(playerId) && isMyTurn);
 
     return {
+      gameType: 'rummy',
       phase: this.phase,
       turn: activePlayer ? activePlayer.id : null,
       hasDrawn: this.hasDrawn,

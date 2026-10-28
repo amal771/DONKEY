@@ -18,6 +18,7 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// QR code generation endpoint
 app.get('/qr/:code', async (req, res) => {
   try {
     const url = `${req.protocol}://${req.get('host')}/?room=${encodeURIComponent(req.params.code.slice(0, 8))}`;
@@ -68,7 +69,7 @@ io.on('connection', socket => {
       hostId: socket.id,
       gameType: gType,
       options: options || {},
-      players: [{ id: socket.id, name: trimmed }],
+      players: [{ id: socket.id, name: trimmed, online: true }],
       instance: null
     };
 
@@ -88,7 +89,7 @@ io.on('connection', socket => {
     const room = rooms.get(trimmedCode);
     if (!room) return socket.emit('errorMsg', 'Room not found. Check code.');
 
-    room.players.push({ id: socket.id, name: trimmedName });
+    room.players.push({ id: socket.id, name: trimmedName, online: true });
     socket.join(room.code);
     socket.data.room = room.code;
 
@@ -107,6 +108,14 @@ io.on('connection', socket => {
     }
 
     broadcastRoomState(room);
+  });
+
+  // User touched or interacted with screen (Rummy 45s timer boost)
+  socket.on('playerInteraction', () => {
+    const room = rooms.get(socket.data.room);
+    if (room && room.instance && room.gameType === 'rummy') {
+      room.instance.registerInteraction(socket.id);
+    }
   });
 
   // Rummy Socket Events
@@ -195,29 +204,45 @@ io.on('connection', socket => {
     room.instance.respondSurrender(socket.id, approve);
   });
 
-  const handleDisconnect = () => {
-    const room = rooms.get(socket.data.room);
+  // Exit Room to Lobby Handler
+  socket.on('leaveRoom', () => {
+    leaveCurrentRoom(socket);
+    socket.emit('leftRoom');
+  });
+
+  const leaveCurrentRoom = (sock) => {
+    const room = rooms.get(sock.data.room);
     if (!room) return;
 
-    if (room.instance && typeof room.instance.cleanup === 'function') {
-      // If room empties cleanup timers
+    sock.leave(room.code);
+    sock.data.room = null;
+
+    if (room.instance && typeof room.instance.setPlayerOnline === 'function') {
+      room.instance.setPlayerOnline(sock.id, false);
     }
 
-    room.players = room.players.filter(p => p.id !== socket.id);
+    room.players = room.players.filter(p => p.id !== sock.id);
     if (room.players.length === 0) {
       if (room.instance && typeof room.instance.cleanup === 'function') {
         room.instance.cleanup();
       }
       rooms.delete(room.code);
     } else {
-      if (room.hostId === socket.id) {
+      if (room.hostId === sock.id) {
         room.hostId = room.players[0].id;
       }
       broadcastRoomState(room);
     }
   };
 
-  socket.on('disconnect', handleDisconnect);
+  socket.on('disconnect', () => {
+    const room = rooms.get(socket.data.room);
+    if (room && room.instance && typeof room.instance.setPlayerOnline === 'function') {
+      room.instance.setPlayerOnline(socket.id, false);
+      broadcastRoomState(room);
+    }
+    leaveCurrentRoom(socket);
+  });
 });
 
 const PORT = process.env.PORT || 3000;

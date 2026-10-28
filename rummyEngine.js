@@ -1,6 +1,21 @@
 /**
  * Party Blaster - Rummy Game Engine
  * 20-Player Custom Indian/Marriage Rummy Variant
+ *
+ * Rules & Inactivity Timers Implemented:
+ * 1. Default Inactivity Timer: 20 seconds.
+ * 2. Active Interaction Extension: If user touches/moves/interacts, timer extends to 45 seconds.
+ * 3. Offline Player Timer: When a player is offline/disconnected, turn auto-plays in 8 seconds.
+ * 4. Auto-Play on Inactivity / Timeout:
+ *    - Automatically draws 1 card from the closed stock pile.
+ *    - Automatically discards 1 non-joker card onto the open discard pile.
+ * 5. Hidden vs Open Joker discard taking rules:
+ *    - If joker is hidden, taking from discard is allowed.
+ *    - If joker is open, picking an open joker from discard is blocked.
+ * 6. Drops: First Drop = 20 pts, Middle Drop = 40 pts.
+ * 7. Sikkan (identical triplets) recognized as pure sequence.
+ * 8. Pure sequence reveal inspections (5s table popup, 15s unlocker inspection).
+ * 9. Soft invalid declaration popup.
  */
 
 const SUITS = ['♠', '♥', '♦', '♣'];
@@ -63,7 +78,6 @@ class RummyGame {
     this.stockPile = createDecks(this.deckCount, this.jokersPerDeck);
     this.discardPile = [];
 
-    // Cut Joker selection
     let cutIdx = this.stockPile.findIndex(c => !c.isPrintedJoker);
     this.cutJoker = cutIdx >= 0 ? this.stockPile.splice(cutIdx, 1)[0] : this.stockPile.pop();
 
@@ -80,7 +94,9 @@ class RummyGame {
       dropScore: null,
       turnsTaken: 0,
       waitlisted: idx >= 20,
-      declared: false
+      declared: false,
+      online: true,
+      hasInteracted: false
     }));
 
     this.turnIndex = 0;
@@ -89,7 +105,12 @@ class RummyGame {
     this.declaringPlayerId = null;
     this.winner = null;
 
+    // Timer configs
+    this.timerLimit = 20; // default 20s if inactive
+    this.timerElapsed = 0;
+
     this.dealInitialCards();
+    this.initTurnTimer();
   }
 
   dealInitialCards() {
@@ -115,6 +136,88 @@ class RummyGame {
     return this.players[this.turnIndex];
   }
 
+  initTurnTimer() {
+    const p = this.getActivePlayer();
+    if (!p) return;
+
+    this.timerElapsed = 0;
+    p.hasInteracted = false;
+
+    if (!p.online) {
+      this.timerLimit = 8; // Offline players get 8 seconds
+    } else {
+      this.timerLimit = 20; // Inactive default 20 seconds
+    }
+
+    clearInterval(this.turnInterval);
+    this.turnInterval = setInterval(() => this.tick(), 1000);
+  }
+
+  // Player moved card, dragged, or touched UI
+  registerInteraction(playerId) {
+    const p = this.getActivePlayer();
+    if (p && p.id === playerId && !p.hasInteracted) {
+      p.hasInteracted = true;
+      this.timerLimit = 45; // Extend timer to 45 seconds on activity
+      this.emitTimerTick();
+    }
+  }
+
+  tick() {
+    if (this.phase !== 'playing') return;
+    const p = this.getActivePlayer();
+    if (!p) return;
+
+    this.timerElapsed++;
+    this.emitTimerTick();
+
+    if (this.timerElapsed >= this.timerLimit) {
+      this.autoPlayTurn(p);
+    }
+  }
+
+  emitTimerTick() {
+    const p = this.getActivePlayer();
+    const left = Math.max(0, this.timerLimit - this.timerElapsed);
+    this.io.to(this.room.code).emit('rummyTick', {
+      playerId: p ? p.id : null,
+      left,
+      limit: this.timerLimit
+    });
+  }
+
+  // Auto-play when 20s (inactive), 45s (active), or 8s (offline) expires
+  autoPlayTurn(p) {
+    if (this.phase !== 'playing') return;
+
+    // Step 1: Draw from stock pile if not already drawn
+    if (!this.hasDrawn) {
+      if (this.stockPile.length === 0) this.recycleDiscards();
+      if (this.stockPile.length > 0) {
+        const drawn = this.stockPile.pop();
+        p.hand.push(drawn);
+        this.hasDrawn = true;
+        p.turnsTaken++;
+      }
+    }
+
+    // Step 2: Auto-discard a non-joker card onto the open discard pile
+    let discardIdx = p.hand.findIndex(c => !this.isWildJoker(c));
+    if (discardIdx < 0) discardIdx = 0;
+
+    if (p.hand.length > 0) {
+      const [discarded] = p.hand.splice(discardIdx, 1);
+      this.discardPile.push(discarded);
+      this.io.to(this.room.code).emit('scroll', {
+        secs: 4,
+        text: `⏳ Time out! ${p.name} auto-drew from pile and discarded ${discarded.rank}${discarded.suit}.`
+      });
+    }
+
+    this.nextTurn();
+    this.broadcastState();
+  }
+
   nextTurn() {
     this.hasDrawn = false;
     let nextIdx = (this.turnIndex + 1) % this.players.length;
@@ -124,6 +227,11 @@ class RummyGame {
       count++;
     }
     this.turnIndex = nextIdx;
+    this.initTurnTimer();
+  }
+
+  cleanup() {
+    clearInterval(this.turnInterval);
   }
 
   drawCard(playerId, source = 'stock') {
@@ -132,12 +240,14 @@ class RummyGame {
     if (!p || p.id !== playerId) return { ok: false, msg: 'Not your turn.' };
     if (this.hasDrawn) return { ok: false, msg: 'Already drew a card this turn.' };
 
+    this.registerInteraction(playerId);
+
     let card;
     if (source === 'discard') {
       if (this.discardPile.length === 0) return { ok: false, msg: 'Discard pile is empty.' };
       const topDiscard = this.discardPile[this.discardPile.length - 1];
 
-      // If Joker is OPEN/revealed, you cannot pick a Joker from the discard pile.
+      // If Joker is OPEN/revealed, you cannot pick an open Joker from the discard pile.
       // If the Joker is HIDDEN, taking it is PERMITTED.
       if (this.jokerRevealedToAll && this.isWildJoker(topDiscard)) {
         return { ok: false, msg: 'Cannot pick an open Joker from the discard pile!' };
@@ -374,6 +484,7 @@ class RummyGame {
   finishGame(winnerId) {
     this.phase = 'finished';
     this.jokerRevealedToAll = true;
+    clearInterval(this.turnInterval);
 
     for (const p of this.players) {
       if (p.waitlisted) continue;
@@ -413,6 +524,24 @@ class RummyGame {
     }
   }
 
+  setPlayerOnline(playerId, isOnline) {
+    const p = this.players.find(x => x.id === playerId);
+    if (p) {
+      p.online = isOnline;
+      if (!isOnline && this.getActivePlayer()?.id === playerId) {
+        // Drop limit to 8 seconds if current player disconnected
+        this.timerLimit = 8;
+        this.emitTimerTick();
+      }
+    }
+  }
+
+  broadcastState() {
+    for (const p of this.players) {
+      this.io.to(p.id).emit('gameState', this.getStateFor(p.id));
+    }
+  }
+
   getStateFor(playerId) {
     const activePlayer = this.getActivePlayer();
     const isMyTurn = activePlayer && activePlayer.id === playerId;
@@ -424,6 +553,8 @@ class RummyGame {
       gameType: 'rummy',
       phase: this.phase,
       turn: activePlayer ? activePlayer.id : null,
+      turnSecondsLeft: Math.max(0, this.timerLimit - this.timerElapsed),
+      turnDuration: this.timerLimit,
       hasDrawn: this.hasDrawn,
       stockCount: this.stockPile.length,
       topDiscard: this.discardPile[this.discardPile.length - 1] || null,
@@ -442,6 +573,7 @@ class RummyGame {
         cardCount: p.hand.length,
         hasPure: p.hasPure,
         dropped: p.dropped,
+        online: p.online,
         score: p.score,
         waitlisted: p.waitlisted
       }))

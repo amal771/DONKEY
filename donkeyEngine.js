@@ -1,14 +1,5 @@
 /**
  * Party Blaster - Donkey Card Game Engine
- * Preserves all complete original Donkey mechanics:
- * - 16, 32, 52, or 104 card decks
- * - Adaptive turn timers (50s / 15s)
- * - Settle-up timer & Ace of Spades opening
- * - Lead suit following & HIT collection
- * - Whip cracking sound effects
- * - 3-player surrender option
- * - Card request mechanic between players
- * - Seating ring & donkey designation
  */
 
 const SUITS = ['♠', '♥', '♦', '♣'];
@@ -123,6 +114,11 @@ class DonkeyGame {
 
   cleanup() {
     clearInterval(this.iv);
+  }
+
+  setPlayerOnline(playerId, isOnline) {
+    const p = this.players.find(x => x.id === playerId);
+    if (p) p.online = isOnline;
   }
 
   tick() {
@@ -248,7 +244,6 @@ class DonkeyGame {
       this.leadSuit = null;
       this.reveal = false;
 
-      // Assign ranks to players with empty hands
       this.players.forEach(pl => {
         if (!pl.hand.length && !pl.rank) {
           pl.rank = ++this.finished;
@@ -382,6 +377,7 @@ class DonkeyGame {
         id: p.id,
         name: p.name,
         color: p.color,
+        online: p.online,
         handCount: p.hand.length,
         rank: p.rank
       }))

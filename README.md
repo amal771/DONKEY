@@ -1,32 +1,21 @@
-# Party Blaster — Multi-Game Portal (Rummy & Donkey)
+# Party Blaster — Mobile-Optimized Rummy & Donkey
 
-Party Blaster is a web-based card game hub that supports **20-Player Rummy** and **Donkey**.
+Party Blaster is an online multiplayer card game portal.
 
-## Features in this Version:
-1. **Room QR Code**:
-   - Universal `📱 QR Code` button in the header across all games.
-   - Shows a modal with the room code and scannable QR code (`/qr/CODE`) allowing mobile players to scan and join instantly.
-2. **Exit to Lobby**:
-   - `Exit to Lobby` button visible in the top navigation bar when inside any game room.
-   - Confirms departure, safely detaches the player's socket, prunes the table or manages offline state, and returns the client to the lobby view.
-3. **Adaptive Rummy Turn Timers & Auto-Play**:
-   - **Inactive Player**: 20-second countdown.
-   - **Active Touch/Movement**: Interacting with cards or touching the screen extends the timer to **45 seconds**.
-   - **Offline Player**: Automatically executes the turn within **8 seconds**.
-   - **Timeout Auto-Action**:
-     - Automatically draws 1 card from the stock pile.
-     - Automatically discards 1 non-joker card to the top of the open discard pile and advances the turn.
-4. **Donkey Game Features**:
-   - 16, 32, 52, or 104 deck sizes.
-   - 30-second Ace of Spades settle-up start.
-   - Lead suit following, high-card highlight, off-suit HIT collection, and whip sound.
-   - Card request modal and 3-player surrender negotiation.
-5. **Universal Fullscreen Support**:
-   - Accessible from the top bar across mobile and desktop.
-
-## Run Locally
-```bash
-npm install
-npm start
-```
-Open `http://localhost:3000`.
+## What's New:
+1. **Single-Screen Mobile Orientation**:
+   - Table felt (Stock pile, Wild cut-joker slot, Discard pile) and all 13 player cards fit concurrently on one mobile screen without vertical scrolling (`100dvh`).
+   - Cards use a cascading fanned layout (`margin-left: -26px`) so all 13 cards remain fully visible and clickable even on narrow mobile screens (360px - 420px width).
+2. **Sort Button**:
+   - Tapping `🔀 Sort` organizes hand cards automatically by suit groups and ascending rank order.
+3. **Group by Selection**:
+   - Select 2 to 5 cards and tap `🗂 Group` to bundle them into custom meld boxes (`G1`, `G2`, etc.).
+   - Declaration (`Show`) automatically submits user-formed groups for rule verification.
+   - Tap `Ungroup` to merge cards back into a single pool.
+4. **Adaptive Timers**:
+   - Inactive: 20s.
+   - Screen interaction/touch: 45s.
+   - Offline: 8s.
+   - Auto-draw and auto-discard on expiry.
+5. **Universal QR Code & Exit to Lobby**:
+   - Accessible anytime from top bar.

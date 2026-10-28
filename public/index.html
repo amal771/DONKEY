@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Party Blaster — Multiplayer Game Hub</title>
+  <title>Party Blaster</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
@@ -12,6 +12,7 @@
       --gold: #f6c85f;
       --accent: #26a69a;
       --red: #e74c3c;
+      --neon-green: #39ff14;
       --text: #e8f1f5;
       --border: #1f4256;
     }
@@ -97,7 +98,7 @@
       border: 3px solid #1f6954;
       border-radius: 20px;
       padding: 18px;
-      min-height: 440px;
+      min-height: 400px;
       position: relative;
     }
     .piles-bar {
@@ -127,6 +128,73 @@
       border-style: solid;
       background: #0e3b2c;
       box-shadow: 0 0 12px var(--gold);
+    }
+
+    /* Donkey Felt & Seating Ring */
+    .donkey-table-container {
+      position: relative;
+      background: #08261f;
+      border: 3px solid #1c5243;
+      border-radius: 28px;
+      padding: 65px 20px;
+      margin-bottom: 14px;
+      min-height: 420px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .seats-ring {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .player-seat {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .seat-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0f2e26;
+      border: 2px solid #285347;
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .seat-badge.active-turn {
+      border-color: var(--neon-green);
+      box-shadow: 0 0 14px var(--neon-green);
+      background: #123d32;
+    }
+    .player-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .donkey-felt {
+      width: 68%;
+      min-height: 220px;
+      border-radius: 26px;
+      background: radial-gradient(ellipse at center, #0b503f, #07392f);
+      border: 3px solid #1f6954;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 16px;
+      box-shadow: inset 0 0 30px #000a;
+      z-index: 5;
     }
 
     /* Cards */
@@ -198,6 +266,19 @@
       border-radius: 8px;
       z-index: 120;
     }
+    .scroll-banner {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fdfdfd;
+      color: #111;
+      font-weight: bold;
+      padding: 8px 18px;
+      border-radius: 6px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      z-index: 110;
+    }
   </style>
 </head>
 <body>
@@ -211,8 +292,9 @@
   </header>
 
   <div id="toast" class="toast hidden"></div>
+  <div id="scrollBanner" class="scroll-banner hidden"></div>
 
-  <!-- Hidden Joker Inspection Modal -->
+  <!-- Hidden Joker Inspection Modal (Rummy) -->
   <div id="jokerModal" class="modal hidden">
     <div class="modal-content">
       <button class="close-btn" onclick="closeJokerModal()">×</button>
@@ -228,7 +310,7 @@
     </div>
   </div>
 
-  <!-- Invalid Declaration Prompt Modal -->
+  <!-- Invalid Declaration Prompt Modal (Rummy) -->
   <div id="invalidDeclModal" class="modal hidden">
     <div class="modal-content">
       <h3 style="color: #ff7675;">⚠️ Invalid Declaration</h3>
@@ -236,6 +318,30 @@
       <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
         <button class="btn" onclick="closeInvalidDeclModal()">Rearrange Cards</button>
         <button class="btn btn-secondary" onclick="discardFromDecl()">Discard & Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card Request Modal (Donkey) -->
+  <div id="requestModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>🃏 Card Request</h3>
+      <p id="requestModalMsg">A player is requesting all your cards!</p>
+      <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
+        <button class="btn btn-success" onclick="respondRequest(true)">Approve & Pass</button>
+        <button class="btn btn-danger" onclick="respondRequest(false)">Decline</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Surrender Modal (Donkey) -->
+  <div id="surrenderModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>🏳 Surrender Offer</h3>
+      <p id="surrenderModalMsg">A player is offering to surrender and become the Donkey.</p>
+      <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
+        <button class="btn btn-success" onclick="respondSurrender(true)">Accept Surrender</button>
+        <button class="btn btn-secondary" onclick="respondSurrender(false)">Decline</button>
       </div>
     </div>
   </div>
@@ -250,18 +356,19 @@
           <p>13 cards, 3–6 decks, 2–3 printed jokers, hidden/open joker, Sikkan (identical triplets), first/middle drop, and 80-pt rule.</p>
         </div>
         <div class="game-card" id="card-donkey" onclick="setGame('donkey')">
-          <h3>🫏 Donkey Online</h3>
-          <p>Multiplayer classic shedding trick card game with HIT whip effects.</p>
+          <h3>🫏 Donkey</h3>
+          <p>Multiplayer trick card game with HIT whip effects, 16/32/52/104 cards, Ace of Spades opening, and Donkey elimination.</p>
         </div>
       </div>
 
       <div class="panel">
-        <h3>Create or Join Table</h3>
+        <h3 id="panelTitle">Create or Join Table</h3>
         <div class="field">
           <label>Your Display Name</label>
-          <input id="playerName" placeholder="e.g. MasterBlaster">
+          <input id="playerName" placeholder="e.g. CardMaster">
         </div>
 
+        <!-- Rummy Options -->
         <div id="rummyOptions">
           <div class="field">
             <label>Number of Decks (3 to 6)</label>
@@ -288,6 +395,19 @@
           </div>
         </div>
 
+        <!-- Donkey Options -->
+        <div id="donkeyOptions" class="hidden">
+          <div class="field">
+            <label>Deck Type</label>
+            <select id="donkeyDeckSize">
+              <option value="16">16 cards (Ace to Jack)</option>
+              <option value="32">32 cards (Ace to 7)</option>
+              <option value="52" selected>52 cards (single deck)</option>
+              <option value="104">104 cards (double deck)</option>
+            </select>
+          </div>
+        </div>
+
         <div style="display: flex; gap: 12px; margin-top: 15px; flex-wrap: wrap;">
           <button class="btn" onclick="createRoom()">Create Room</button>
           <input id="joinCode" placeholder="ROOM CODE" style="width: 120px; text-transform: uppercase;">
@@ -298,60 +418,92 @@
 
     <!-- Interactive Game View -->
     <section id="gameView" class="hidden">
+      <!-- Universal Top Status Bar -->
       <div class="panel" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; flex-wrap: wrap; gap: 10px;">
         <div>
           <span id="turnIndicator" style="font-weight: 700;">Waiting for host...</span>
+          <div id="subNotice" style="font-size: 13px; color: var(--gold); margin-top: 4px;"></div>
         </div>
-        <div style="display: flex; gap: 8px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button id="startBtn" class="btn hidden" onclick="socket.emit('startGame')">Deal & Start</button>
+          
+          <!-- Rummy specific action buttons -->
           <button id="dropBtn" class="btn btn-danger hidden" onclick="dropRummy()">Drop (Fold)</button>
+          
+          <!-- Donkey specific action buttons -->
+          <label id="whipWrap" class="hidden" style="display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer;">
+            <input type="checkbox" id="whipToggle"> 🪢 Whip on HIT
+          </label>
+          <button id="requestBtn" class="btn btn-secondary hidden" onclick="requestDonkeyCards()">Request Cards</button>
+          <button id="surrenderBtn" class="btn btn-danger hidden" onclick="surrenderDonkey()">🏳 Surrender</button>
         </div>
       </div>
 
-      <!-- Table Felt -->
-      <div class="rummy-table" id="rummyTable">
-        <div class="piles-bar">
-          <!-- Closed Stock Pile -->
-          <div class="pile-box">
-            <div class="card-pile active" onclick="drawFromStock()">
-              <span>STOCK</span>
-              <span id="stockCount" style="font-size: 11px;">--</span>
+      <!-- VIEW 1: Rummy Table -->
+      <div id="rummyViewContainer" class="hidden">
+        <div class="rummy-table" id="rummyTable">
+          <div class="piles-bar">
+            <!-- Closed Stock Pile -->
+            <div class="pile-box">
+              <div class="card-pile active" onclick="drawFromStock()">
+                <span>STOCK</span>
+                <span id="stockCount" style="font-size: 11px;">--</span>
+              </div>
+            </div>
+
+            <!-- Cut Joker -->
+            <div class="pile-box">
+              <div class="card-pile" id="jokerDisplay">
+                <span>JOKER</span>
+                <span id="jokerVal" style="font-size: 11px;">HIDDEN</span>
+              </div>
+            </div>
+
+            <!-- Discard Pile -->
+            <div class="pile-box">
+              <div class="card-pile" id="discardPile" onclick="drawFromDiscard()">
+                <span>DISCARD</span>
+                <div id="topDiscardCard"></div>
+              </div>
             </div>
           </div>
 
-          <!-- Cut Joker -->
-          <div class="pile-box">
-            <div class="card-pile" id="jokerDisplay">
-              <span>JOKER</span>
-              <span id="jokerVal" style="font-size: 11px;">HIDDEN</span>
+          <div id="rummyPlayerList" style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 15px 0;"></div>
+        </div>
+
+        <div class="panel" style="margin-top: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <h3>Your Hand</h3>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary" onclick="unlockPureSequence()">Reveal Pure / Sikkan</button>
+              <button class="btn" onclick="discardRummyCard()">Discard Card</button>
+              <button class="btn btn-success" onclick="declareRummy()">Declare Show</button>
             </div>
           </div>
+          <div class="hand-container" id="rummyHand"></div>
+        </div>
+      </div>
 
-          <!-- Discard Pile -->
-          <div class="pile-box">
-            <div class="card-pile" id="discardPile" onclick="drawFromDiscard()">
-              <span>DISCARD</span>
-              <div id="topDiscardCard"></div>
-            </div>
+      <!-- VIEW 2: Donkey Table -->
+      <div id="donkeyViewContainer" class="hidden">
+        <div class="donkey-table-container" id="donkeyTableContainer">
+          <div class="seats-ring" id="donkeySeatsRing"></div>
+          <div class="donkey-felt" id="donkeyFelt">
+            <span style="color: #a9c2b6;">Cards played this trick appear here</span>
           </div>
         </div>
 
-        <!-- Players List -->
-        <div id="playerList" style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 15px 0;"></div>
+        <div class="panel" style="margin-top: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <h3>Your Hand</h3>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" onclick="playDonkeyCard()">Play Selected Card</button>
+            </div>
+          </div>
+          <div class="hand-container" id="donkeyHand"></div>
+        </div>
       </div>
 
-      <!-- Hand Management -->
-      <div class="panel" style="margin-top: 14px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-          <h3>Your Hand</h3>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary" onclick="unlockPureSequence()">Reveal Pure / Sikkan</button>
-            <button class="btn" onclick="discardSelectedCard()">Discard Card</button>
-            <button class="btn btn-success" onclick="declareRummy()">Declare Show</button>
-          </div>
-        </div>
-        <div class="hand-container" id="playerHand"></div>
-      </div>
     </section>
   </main>
 
@@ -359,6 +511,7 @@
     const socket = io();
     let currentRoomCode = null;
     let selectedGame = 'rummy';
+    let activeGameType = 'rummy';
     let gameState = null;
     let selectedCards = new Set();
     let jokerTimerInterval = null;
@@ -370,7 +523,13 @@
       setTimeout(() => t.classList.add('hidden'), 3500);
     }
 
-    // Universal Fullscreen Toggle
+    function showScroll(text, secs = 4) {
+      const b = document.getElementById('scrollBanner');
+      b.textContent = text;
+      b.classList.remove('hidden');
+      setTimeout(() => b.classList.add('hidden'), secs * 1000);
+    }
+
     function toggleFullScreen() {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(err => console.log(err));
@@ -384,17 +543,25 @@
       document.getElementById('card-rummy').classList.toggle('active', g === 'rummy');
       document.getElementById('card-donkey').classList.toggle('active', g === 'donkey');
       document.getElementById('rummyOptions').classList.toggle('hidden', g !== 'rummy');
+      document.getElementById('donkeyOptions').classList.toggle('hidden', g !== 'donkey');
     }
 
     function createRoom() {
       const name = document.getElementById('playerName').value.trim();
       if (!name) return showToast('Please enter your name.');
 
-      const options = {
-        deckCount: document.getElementById('deckCount').value,
-        jokersPerDeck: document.getElementById('jokersPerDeck').value,
-        jokerType: document.getElementById('jokerType').value
-      };
+      let options = {};
+      if (selectedGame === 'rummy') {
+        options = {
+          deckCount: document.getElementById('deckCount').value,
+          jokersPerDeck: document.getElementById('jokersPerDeck').value,
+          jokerType: document.getElementById('jokerType').value
+        };
+      } else {
+        options = {
+          deckSize: document.getElementById('donkeyDeckSize').value
+        };
+      }
 
       socket.emit('createRoom', { name, gameType: selectedGame, options });
     }
@@ -409,27 +576,35 @@
     socket.on('roomCreated', data => onJoined(data));
     socket.on('joinedRoom', data => onJoined(data));
     socket.on('errorMsg', msg => showToast(msg));
+    socket.on('scroll', data => showScroll(data.text, data.secs));
 
     function onJoined({ code, gameType }) {
       currentRoomCode = code;
+      activeGameType = gameType;
       document.getElementById('portalView').classList.add('hidden');
       document.getElementById('gameView').classList.remove('hidden');
       document.getElementById('roomBadge').classList.remove('hidden');
-      document.getElementById('roomBadge').textContent = `ROOM: ${code}`;
+      document.getElementById('roomBadge').textContent = `ROOM: ${code} (${gameType.toUpperCase()})`;
+
+      // Switch view container
+      document.getElementById('rummyViewContainer').classList.toggle('hidden', gameType !== 'rummy');
+      document.getElementById('donkeyViewContainer').classList.toggle('hidden', gameType !== 'donkey');
     }
 
     socket.on('lobbyUpdate', data => {
+      activeGameType = data.gameType;
       const isHost = data.hostId === socket.id;
       const startBtn = document.getElementById('startBtn');
       startBtn.classList.toggle('hidden', !isHost);
-      document.getElementById('turnIndicator').textContent = `Players in Lobby: ${data.players.length} (Host: ${data.players.find(p => p.id === data.hostId)?.name})`;
+      document.getElementById('turnIndicator').textContent = `Game: ${data.gameType.toUpperCase()} | Players: ${data.players.length}`;
+      document.getElementById('subNotice').textContent = `Host: ${data.players.find(p => p.id === data.hostId)?.name || 'Host'}`;
     });
 
     socket.on('dropNotice', ({ name, score }) => {
       showToast(`${name} has dropped the round (${score} pts).`);
     });
 
-    // Hidden Joker Inspection Modal Handling
+    // Hidden Joker Inspection Modal Handling (Rummy)
     socket.on('jokerInspectionBroadcast', ({ unlockedBy, cutJoker, allDuration, unlockerId, unlockerDuration }) => {
       const isMe = socket.id === unlockerId;
       const duration = isMe ? unlockerDuration : allDuration;
@@ -466,7 +641,6 @@
       document.getElementById('jokerModal').classList.add('hidden');
     }
 
-    // Invalid declaration popup handling
     socket.on('invalidDeclarationPrompt', ({ message }) => {
       document.getElementById('invalidDeclMsg').textContent = message;
       document.getElementById('invalidDeclModal').classList.remove('hidden');
@@ -478,17 +652,32 @@
 
     function discardFromDecl() {
       closeInvalidDeclModal();
-      discardSelectedCard();
+      discardRummyCard();
     }
 
     socket.on('gameState', state => {
       gameState = state;
-      renderState(state);
+      activeGameType = state.gameType;
+
+      document.getElementById('rummyViewContainer').classList.toggle('hidden', state.gameType !== 'rummy');
+      document.getElementById('donkeyViewContainer').classList.toggle('hidden', state.gameType !== 'donkey');
+
+      if (state.gameType === 'rummy') {
+        renderRummyState(state);
+      } else {
+        renderDonkeyState(state);
+      }
     });
 
-    function renderState(s) {
+    // ----------------------------------------------------
+    // RUMMY RENDERING
+    // ----------------------------------------------------
+    function renderRummyState(s) {
       document.getElementById('startBtn').classList.add('hidden');
       document.getElementById('dropBtn').classList.remove('hidden');
+      document.getElementById('requestBtn').classList.add('hidden');
+      document.getElementById('surrenderBtn').classList.add('hidden');
+      document.getElementById('whipWrap').classList.add('hidden');
 
       document.getElementById('stockCount').textContent = `${s.stockCount} left`;
       const jDisp = document.getElementById('jokerVal');
@@ -504,15 +693,16 @@
       const activeP = s.players.find(p => p.id === s.turn);
       const isMyTurn = s.turn === socket.id;
       document.getElementById('turnIndicator').textContent = isMyTurn ? '👉 It is YOUR turn! (Draw or Drop)' : `Current turn: ${activeP ? activeP.name : 'Waiting...'}`;
+      document.getElementById('subNotice').textContent = s.winner ? `🏆 Winner: ${s.winner}!` : (s.phase === 'finished' ? 'Game Over' : '');
 
-      const pList = document.getElementById('playerList');
+      const pList = document.getElementById('rummyPlayerList');
       pList.innerHTML = s.players.map(p => `
         <div style="background: #09221b; padding: 4px 10px; border-radius: 8px; font-size: 12px; border: 1px solid ${p.id === s.turn ? 'var(--gold)' : '#1f4256'}">
           ${p.name} ${p.waitlisted ? '(Spectating)' : ''} ${p.dropped ? '(Dropped: ' + p.score + ')' : ''} ${p.hasPure ? '✨Pure' : ''}
         </div>
       `).join('');
 
-      const handEl = document.getElementById('playerHand');
+      const handEl = document.getElementById('rummyHand');
       handEl.innerHTML = '';
       s.hand.forEach(c => {
         const cardDiv = document.createElement('div');
@@ -521,21 +711,10 @@
         cardDiv.onclick = () => {
           if (selectedCards.has(c.id)) selectedCards.delete(c.id);
           else selectedCards.add(c.id);
-          renderState(gameState);
+          renderRummyState(gameState);
         };
         handEl.appendChild(cardDiv);
       });
-    }
-
-    function renderCardHTML(c) {
-      if (c.isPrintedJoker) {
-        return `<div style="text-align:center;">★<br>JKR</div>`;
-      }
-      return `
-        <div style="font-size: 13px;">${c.rank}</div>
-        <div style="font-size: 20px; text-align: center;">${c.suit}</div>
-        <div style="font-size: 13px; text-align: right;">${c.rank}</div>
-      `;
     }
 
     function drawFromStock() {
@@ -546,7 +725,7 @@
       socket.emit('rummyDraw', { source: 'discard' });
     }
 
-    function discardSelectedCard() {
+    function discardRummyCard() {
       const arr = Array.from(selectedCards);
       if (arr.length !== 1) return showToast('Please select exactly 1 card to discard.');
       socket.emit('rummyDiscard', { cardId: arr[0] });
@@ -571,6 +750,165 @@
       const discardCardId = arr[0];
       const remainingHandIds = gameState.hand.filter(c => c.id !== discardCardId).map(c => c.id);
       socket.emit('rummyDeclare', { groups: [remainingHandIds], discardCardId });
+    }
+
+    // ----------------------------------------------------
+    // DONKEY RENDERING
+    // ----------------------------------------------------
+    function renderDonkeyState(s) {
+      document.getElementById('startBtn').classList.add('hidden');
+      document.getElementById('dropBtn').classList.add('hidden');
+      document.getElementById('whipWrap').classList.remove('hidden');
+
+      const activeP = s.players.find(p => p.id === s.turn);
+      const isMyTurn = s.turn === socket.id;
+
+      document.getElementById('turnIndicator').textContent = isMyTurn 
+        ? `👉 It is YOUR turn! (${s.turnSecondsLeft}s)` 
+        : `Turn: ${activeP ? activeP.name : 'Waiting'} (${s.turnSecondsLeft}s)`;
+      document.getElementById('subNotice').textContent = s.notice || '';
+
+      // Controls for Donkey
+      const canReq = isMyTurn && s.table.length === 0;
+      document.getElementById('requestBtn').classList.toggle('hidden', !canReq);
+      document.getElementById('surrenderBtn').classList.toggle('hidden', !s.canSurrender);
+
+      // Card Request prompt modal
+      if (s.request && s.request.to === socket.id) {
+        const fromPlayer = s.players.find(p => p.id === s.request.from);
+        document.getElementById('requestModalMsg').textContent = `${fromPlayer ? fromPlayer.name : 'A player'} requests all your cards!`;
+        document.getElementById('requestModal').classList.remove('hidden');
+      } else {
+        document.getElementById('requestModal').classList.add('hidden');
+      }
+
+      // Surrender prompt modal
+      if (s.surrender && s.surrender.by !== socket.id) {
+        const byPlayer = s.players.find(p => p.id === s.surrender.by);
+        document.getElementById('surrenderModalMsg').textContent = `${byPlayer ? byPlayer.name : 'A player'} offers to surrender and become the Donkey.`;
+        document.getElementById('surrenderModal').classList.remove('hidden');
+      } else {
+        document.getElementById('surrenderModal').classList.add('hidden');
+      }
+
+      // Render Seating Ring
+      const seatsEl = document.getElementById('donkeySeatsRing');
+      seatsEl.innerHTML = '';
+      const count = s.players.length;
+      const myIdx = Math.max(0, s.players.findIndex(p => p.id === socket.id));
+
+      s.players.forEach((p, idx) => {
+        const offset = (idx - myIdx + count) % count;
+        const angle = (offset / count) * 2 * Math.PI + Math.PI / 2;
+        const x = 50 + 44 * Math.cos(angle);
+        const y = 50 + 42 * Math.sin(angle);
+
+        const seat = document.createElement('div');
+        seat.className = 'player-seat';
+        seat.style.left = `${x}%`;
+        seat.style.top = `${y}%`;
+
+        const isTurn = p.id === s.turn;
+        seat.innerHTML = `
+          <div class="seat-badge ${isTurn ? 'active-turn' : ''}">
+            <span class="player-dot" style="background:${p.color}"></span>
+            <span>${p.name} ${p.id === socket.id ? '(You)' : ''}</span>
+            <span style="color:var(--gold);">${p.handCount} 🂠</span>
+            ${p.rank ? `<span>🏆 #${p.rank}</span>` : ''}
+            ${s.donkey === p.id ? `<span>🫏</span>` : ''}
+          </div>
+        `;
+        seatsEl.appendChild(seat);
+      });
+
+      // Render Played Cards on Table Felt
+      const felt = document.getElementById('donkeyFelt');
+      felt.innerHTML = '';
+      if (!s.table || s.table.length === 0) {
+        felt.innerHTML = `<span style="color:#a9c2b6;">Cards played this trick appear here</span>`;
+      } else {
+        s.table.forEach(item => {
+          const cardBox = document.createElement('div');
+          cardBox.style.display = 'flex';
+          cardBox.style.flexDirection = 'column';
+          cardBox.style.alignItems = 'center';
+          cardBox.style.gap = '4px';
+
+          const c = item.card;
+          const isHigh = s.highId === c.id;
+          cardBox.innerHTML = `
+            <div class="card ${['♥', '♦'].includes(c.suit) ? 'red' : ''}" style="${isHigh ? 'border: 3px solid var(--gold); box-shadow: 0 0 12px var(--gold);' : ''}">
+              ${renderCardHTML(c)}
+            </div>
+            <div style="font-size: 11px; background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;">
+              <span class="player-dot" style="background:${item.color}; width:8px; height:8px;"></span> ${item.name}
+            </div>
+          `;
+          felt.appendChild(cardBox);
+        });
+      }
+
+      // Render Hand
+      const handEl = document.getElementById('donkeyHand');
+      handEl.innerHTML = '';
+      s.hand.forEach(c => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = `card ${['♥', '♦'].includes(c.suit) ? 'red' : ''} ${selectedCards.has(c.id) ? 'selected' : ''}`;
+        cardDiv.innerHTML = renderCardHTML(c);
+        cardDiv.onclick = () => {
+          if (selectedCards.has(c.id)) selectedCards.clear();
+          else {
+            selectedCards.clear();
+            selectedCards.add(c.id);
+          }
+          renderDonkeyState(gameState);
+        };
+        cardDiv.ondblclick = () => {
+          selectedCards.clear();
+          selectedCards.add(c.id);
+          playDonkeyCard();
+        };
+        handEl.appendChild(cardDiv);
+      });
+    }
+
+    function playDonkeyCard() {
+      const arr = Array.from(selectedCards);
+      if (arr.length !== 1) return showToast('Please select 1 card to play.');
+      const whip = document.getElementById('whipToggle').checked;
+      socket.emit('donkeyPlay', { cardId: arr[0], whip });
+      selectedCards.clear();
+    }
+
+    function requestDonkeyCards() {
+      socket.emit('donkeyRequestCards');
+    }
+
+    function respondRequest(approve) {
+      socket.emit('donkeyRespondRequest', { approve });
+      document.getElementById('requestModal').classList.add('hidden');
+    }
+
+    function surrenderDonkey() {
+      if (confirm('Offer to surrender? If approved you will become the Donkey.')) {
+        socket.emit('donkeySurrender');
+      }
+    }
+
+    function respondSurrender(approve) {
+      socket.emit('donkeyRespondSurrender', { approve });
+      document.getElementById('surrenderModal').classList.add('hidden');
+    }
+
+    function renderCardHTML(c) {
+      if (c.isPrintedJoker) {
+        return `<div style="text-align:center;">★<br>JKR</div>`;
+      }
+      return `
+        <div style="font-size: 13px;">${c.rank}</div>
+        <div style="font-size: 20px; text-align: center;">${c.suit}</div>
+        <div style="font-size: 13px; text-align: right;">${c.rank}</div>
+      `;
     }
   </script>
 </body>

@@ -1,10 +1,14 @@
 {
-  "name": "donkey-online-card-game",
-  "version": "0.2.0",
-  "description": "Multiplayer Donkey card game",
+  "name": "party-blaster",
+  "version": "1.1.0",
+  "description": "Party Blaster - Multiplayer Card Game Hub (Rummy 20-Player & Donkey)",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "express": "^4.21.2",
     "qrcode": "^1.5.4",

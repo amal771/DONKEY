@@ -23,6 +23,7 @@
       background: var(--bg);
       color: var(--text);
       user-select: none;
+      touch-action: manipulation;
     }
     header.bar {
       display: flex;
@@ -90,6 +91,29 @@
       padding: 10px;
       color: #fff;
       font: inherit;
+    }
+
+    /* Timer Bar */
+    .timer-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #09201a;
+      border: 1px solid var(--neon-green);
+      color: var(--neon-green);
+      padding: 3px 10px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .timer-badge.urgent {
+      border-color: var(--red);
+      color: #ff7675;
+      animation: pulseUrgent 0.8s infinite alternate;
+    }
+    @keyframes pulseUrgent {
+      from { transform: scale(1); }
+      to { transform: scale(1.05); }
     }
 
     /* Rummy Felt Table */
@@ -224,7 +248,7 @@
       min-height: 110px;
     }
 
-    /* Modals & Inspection Overlays */
+    /* Modals & Overlays */
     .modal {
       position: fixed;
       inset: 0;
@@ -281,18 +305,34 @@
     }
   </style>
 </head>
-<body>
+<body onclick="handleUserInteraction()" ontouchstart="handleUserInteraction()">
 
   <header class="bar">
     <div class="brand">🎉 PARTY <span>BLASTER</span></div>
-    <div style="display: flex; gap: 10px; align-items: center;">
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <button class="btn btn-secondary" onclick="openQrModal()" id="qrNavBtn" title="View Room QR Code">📱 QR Code</button>
       <button class="btn btn-secondary" onclick="toggleFullScreen()" title="Toggle Fullscreen">⛶ Fullscreen</button>
+      <button class="btn btn-danger hidden" onclick="confirmExitToLobby()" id="exitLobbyBtn">Exit to Lobby</button>
       <div id="roomBadge" class="hidden" style="font-weight: 800; color: var(--gold);"></div>
     </div>
   </header>
 
   <div id="toast" class="toast hidden"></div>
   <div id="scrollBanner" class="scroll-banner hidden"></div>
+
+  <!-- QR Code Modal (Available across all games) -->
+  <div id="qrModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeQrModal()">×</button>
+      <h3 style="color: var(--gold);">📱 Scan to Join Room</h3>
+      <p id="qrCodeText" style="font-size: 28px; font-weight: 900; letter-spacing: 0.15em; color: var(--gold); margin: 10px 0;"></p>
+      <div style="display: flex; justify-content: center; margin: 15px 0;">
+        <img id="qrImage" alt="Join Room QR" style="background: #fff; padding: 6px; border-radius: 8px; width: 180px; height: 180px;">
+      </div>
+      <p class="muted" style="font-size: 13px;">Scan with your phone's camera to join this table immediately.</p>
+      <button class="btn btn-secondary" onclick="closeQrModal()">Close</button>
+    </div>
+  </div>
 
   <!-- Hidden Joker Inspection Modal (Rummy) -->
   <div id="jokerModal" class="modal hidden">
@@ -353,7 +393,7 @@
       <div class="portal-grid">
         <div class="game-card active" id="card-rummy" onclick="setGame('rummy')">
           <h3>🂡 20-Player Rummy</h3>
-          <p>13 cards, 3–6 decks, 2–3 printed jokers, hidden/open joker, Sikkan (identical triplets), first/middle drop, and 80-pt rule.</p>
+          <p>13 cards, 3–6 decks, 2–3 printed jokers, hidden/open joker, Sikkan (identical triplets), first/middle drop, and adaptive inactivity timer (20s/45s/8s).</p>
         </div>
         <div class="game-card" id="card-donkey" onclick="setGame('donkey')">
           <h3>🫏 Donkey</h3>
@@ -422,6 +462,7 @@
       <div class="panel" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; flex-wrap: wrap; gap: 10px;">
         <div>
           <span id="turnIndicator" style="font-weight: 700;">Waiting for host...</span>
+          <span id="turnTimerBadge" class="timer-badge hidden">⏳ 20s</span>
           <div id="subNotice" style="font-size: 13px; color: var(--gold); margin-top: 4px;"></div>
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -516,6 +557,13 @@
     let selectedCards = new Set();
     let jokerTimerInterval = null;
 
+    // Notify server of movement or touch to expand turn timer to 45s
+    function handleUserInteraction() {
+      if (currentRoomCode && activeGameType === 'rummy') {
+        socket.emit('playerInteraction');
+      }
+    }
+
     function showToast(msg) {
       const t = document.getElementById('toast');
       t.textContent = msg;
@@ -537,6 +585,35 @@
         if (document.exitFullscreen) document.exitFullscreen();
       }
     }
+
+    function openQrModal() {
+      if (!currentRoomCode) return showToast('Create or join a room first.');
+      document.getElementById('qrCodeText').textContent = currentRoomCode;
+      document.getElementById('qrImage').src = `/qr/${currentRoomCode}`;
+      document.getElementById('qrModal').classList.remove('hidden');
+    }
+
+    function closeQrModal() {
+      document.getElementById('qrModal').classList.add('hidden');
+    }
+
+    function confirmExitToLobby() {
+      if (confirm('Leave this room and return to the lobby?')) {
+        socket.emit('leaveRoom');
+      }
+    }
+
+    socket.on('leftRoom', () => {
+      currentRoomCode = null;
+      gameState = null;
+      selectedCards.clear();
+      document.getElementById('portalView').classList.remove('hidden');
+      document.getElementById('gameView').classList.add('hidden');
+      document.getElementById('roomBadge').classList.add('hidden');
+      document.getElementById('exitLobbyBtn').classList.add('hidden');
+      document.getElementById('qrModal').classList.add('hidden');
+      showToast('Returned to lobby.');
+    });
 
     function setGame(g) {
       selectedGame = g;
@@ -584,9 +661,9 @@
       document.getElementById('portalView').classList.add('hidden');
       document.getElementById('gameView').classList.remove('hidden');
       document.getElementById('roomBadge').classList.remove('hidden');
+      document.getElementById('exitLobbyBtn').classList.remove('hidden');
       document.getElementById('roomBadge').textContent = `ROOM: ${code} (${gameType.toUpperCase()})`;
 
-      // Switch view container
       document.getElementById('rummyViewContainer').classList.toggle('hidden', gameType !== 'rummy');
       document.getElementById('donkeyViewContainer').classList.toggle('hidden', gameType !== 'donkey');
     }
@@ -602,6 +679,28 @@
 
     socket.on('dropNotice', ({ name, score }) => {
       showToast(`${name} has dropped the round (${score} pts).`);
+    });
+
+    // Rummy dynamic tick
+    socket.on('rummyTick', ({ playerId, left, limit }) => {
+      const badge = document.getElementById('turnTimerBadge');
+      if (activeGameType === 'rummy' && gameState && gameState.phase === 'playing') {
+        badge.classList.remove('hidden');
+        badge.textContent = `⏳ ${left}s`;
+        badge.classList.toggle('urgent', left <= 5);
+      } else {
+        badge.classList.add('hidden');
+      }
+    });
+
+    // Donkey dynamic tick
+    socket.on('tick', ({ left, limit }) => {
+      const badge = document.getElementById('turnTimerBadge');
+      if (activeGameType === 'donkey' && gameState && gameState.phase === 'playing') {
+        badge.classList.remove('hidden');
+        badge.textContent = `⏳ ${left}s`;
+        badge.classList.toggle('urgent', left <= 8);
+      }
     });
 
     // Hidden Joker Inspection Modal Handling (Rummy)
@@ -698,7 +797,7 @@
       const pList = document.getElementById('rummyPlayerList');
       pList.innerHTML = s.players.map(p => `
         <div style="background: #09221b; padding: 4px 10px; border-radius: 8px; font-size: 12px; border: 1px solid ${p.id === s.turn ? 'var(--gold)' : '#1f4256'}">
-          ${p.name} ${p.waitlisted ? '(Spectating)' : ''} ${p.dropped ? '(Dropped: ' + p.score + ')' : ''} ${p.hasPure ? '✨Pure' : ''}
+          ${p.name} ${!p.online ? '<span style="color:#ff7675;">(offline)</span>' : ''} ${p.waitlisted ? '(Spectating)' : ''} ${p.dropped ? '(Dropped: ' + p.score + ')' : ''} ${p.hasPure ? '✨Pure' : ''}
         </div>
       `).join('');
 
@@ -708,7 +807,9 @@
         const cardDiv = document.createElement('div');
         cardDiv.className = `card ${['♥', '♦'].includes(c.suit) ? 'red' : ''} ${selectedCards.has(c.id) ? 'selected' : ''}`;
         cardDiv.innerHTML = renderCardHTML(c);
-        cardDiv.onclick = () => {
+        cardDiv.onclick = (e) => {
+          e.stopPropagation();
+          handleUserInteraction();
           if (selectedCards.has(c.id)) selectedCards.delete(c.id);
           else selectedCards.add(c.id);
           renderRummyState(gameState);
@@ -718,14 +819,17 @@
     }
 
     function drawFromStock() {
+      handleUserInteraction();
       socket.emit('rummyDraw', { source: 'stock' });
     }
 
     function drawFromDiscard() {
+      handleUserInteraction();
       socket.emit('rummyDraw', { source: 'discard' });
     }
 
     function discardRummyCard() {
+      handleUserInteraction();
       const arr = Array.from(selectedCards);
       if (arr.length !== 1) return showToast('Please select exactly 1 card to discard.');
       socket.emit('rummyDiscard', { cardId: arr[0] });
@@ -733,18 +837,21 @@
     }
 
     function dropRummy() {
+      handleUserInteraction();
       if (confirm('Drop this round? (20 pts First Drop, 40 pts Middle Drop)')) {
         socket.emit('rummyDrop');
       }
     }
 
     function unlockPureSequence() {
+      handleUserInteraction();
       const arr = Array.from(selectedCards);
       if (arr.length < 3) return showToast('Select at least 3 cards forming a Pure Sequence or Sikkan.');
       socket.emit('rummyRevealPure', { groupCardIds: arr });
     }
 
     function declareRummy() {
+      handleUserInteraction();
       const arr = Array.from(selectedCards);
       if (arr.length === 0) return showToast('Select 1 card to discard as your show card.');
       const discardCardId = arr[0];
@@ -764,16 +871,14 @@
       const isMyTurn = s.turn === socket.id;
 
       document.getElementById('turnIndicator').textContent = isMyTurn 
-        ? `👉 It is YOUR turn! (${s.turnSecondsLeft}s)` 
-        : `Turn: ${activeP ? activeP.name : 'Waiting'} (${s.turnSecondsLeft}s)`;
+        ? `👉 It is YOUR turn!` 
+        : `Turn: ${activeP ? activeP.name : 'Waiting'}`;
       document.getElementById('subNotice').textContent = s.notice || '';
 
-      // Controls for Donkey
       const canReq = isMyTurn && s.table.length === 0;
       document.getElementById('requestBtn').classList.toggle('hidden', !canReq);
       document.getElementById('surrenderBtn').classList.toggle('hidden', !s.canSurrender);
 
-      // Card Request prompt modal
       if (s.request && s.request.to === socket.id) {
         const fromPlayer = s.players.find(p => p.id === s.request.from);
         document.getElementById('requestModalMsg').textContent = `${fromPlayer ? fromPlayer.name : 'A player'} requests all your cards!`;
@@ -782,7 +887,6 @@
         document.getElementById('requestModal').classList.add('hidden');
       }
 
-      // Surrender prompt modal
       if (s.surrender && s.surrender.by !== socket.id) {
         const byPlayer = s.players.find(p => p.id === s.surrender.by);
         document.getElementById('surrenderModalMsg').textContent = `${byPlayer ? byPlayer.name : 'A player'} offers to surrender and become the Donkey.`;
@@ -791,7 +895,6 @@
         document.getElementById('surrenderModal').classList.add('hidden');
       }
 
-      // Render Seating Ring
       const seatsEl = document.getElementById('donkeySeatsRing');
       seatsEl.innerHTML = '';
       const count = s.players.length;
@@ -812,7 +915,7 @@
         seat.innerHTML = `
           <div class="seat-badge ${isTurn ? 'active-turn' : ''}">
             <span class="player-dot" style="background:${p.color}"></span>
-            <span>${p.name} ${p.id === socket.id ? '(You)' : ''}</span>
+            <span>${p.name} ${p.id === socket.id ? '(You)' : ''} ${!p.online ? '<span style="color:#ff7675;">(offline)</span>' : ''}</span>
             <span style="color:var(--gold);">${p.handCount} 🂠</span>
             ${p.rank ? `<span>🏆 #${p.rank}</span>` : ''}
             ${s.donkey === p.id ? `<span>🫏</span>` : ''}
@@ -821,7 +924,6 @@
         seatsEl.appendChild(seat);
       });
 
-      // Render Played Cards on Table Felt
       const felt = document.getElementById('donkeyFelt');
       felt.innerHTML = '';
       if (!s.table || s.table.length === 0) {
@@ -848,14 +950,14 @@
         });
       }
 
-      // Render Hand
       const handEl = document.getElementById('donkeyHand');
       handEl.innerHTML = '';
       s.hand.forEach(c => {
         const cardDiv = document.createElement('div');
         cardDiv.className = `card ${['♥', '♦'].includes(c.suit) ? 'red' : ''} ${selectedCards.has(c.id) ? 'selected' : ''}`;
         cardDiv.innerHTML = renderCardHTML(c);
-        cardDiv.onclick = () => {
+        cardDiv.onclick = (e) => {
+          e.stopPropagation();
           if (selectedCards.has(c.id)) selectedCards.clear();
           else {
             selectedCards.clear();
@@ -863,7 +965,8 @@
           }
           renderDonkeyState(gameState);
         };
-        cardDiv.ondblclick = () => {
+        cardDiv.ondblclick = (e) => {
+          e.stopPropagation();
           selectedCards.clear();
           selectedCards.add(c.id);
           playDonkeyCard();

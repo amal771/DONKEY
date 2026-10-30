@@ -317,8 +317,54 @@ io.on('connection', s => {
 
   s.on('togglePause', () => {
     const r = roomOf(s);
-    if (!r || r.hostId !== s.id || r.phase !== 'playing') return;
-    r.paused = !r.paused; note(r, r.paused ? 'Game paused by host.' : 'Game resumed.');
+    if (!r || r.phase !== 'playing') return;
+
+    if (r.paused) {
+      r.paused = false;
+      clearTimeout(r.pauseReq?.timer);
+      r.pauseReq = null;
+      note(r, `Game resumed by ${P(r, s.id).name}.`);
+      return;
+    }
+
+    // Game is active, attempting to pause
+    const activePlayers = seated(r).filter(p => p.online && p.hand.length > 0);
+    if (activePlayers.length <= 2) {
+      // If only two players remain (or 2 players total), no confirmation needed!
+      r.paused = true;
+      clearTimeout(r.pauseReq?.timer);
+      r.pauseReq = null;
+      note(r, `Game paused by ${P(r, s.id).name}.`);
+    } else {
+      // More than two players: requires at least one other player's approval
+      clearTimeout(r.pauseReq?.timer);
+      r.pauseReq = {
+        by: s.id,
+        timer: setTimeout(() => {
+          if (r.pauseReq && r.pauseReq.by === s.id) {
+            r.pauseReq = null;
+            note(r, 'Pause request timed out.');
+            io.to(r.code).emit('pausePromptDismiss');
+          }
+        }, 15000)
+      };
+      io.to(r.code).emit('pausePrompt', { byName: P(r, s.id).name, byId: s.id });
+      note(r, `${P(r, s.id).name} requested to pause the game (needs 1 approval).`);
+    }
+  });
+
+  s.on('respondPause', ({ approve }) => {
+    const r = roomOf(s);
+    if (!r || !r.pauseReq || r.pauseReq.by === s.id) return;
+    if (approve) {
+      clearTimeout(r.pauseReq.timer);
+      r.pauseReq = null;
+      r.paused = true;
+      io.to(r.code).emit('pausePromptDismiss');
+      note(r, `Game paused (approved by ${P(r, s.id).name}).`);
+    } else {
+      io.to(s.id).emit('pausePromptDismiss');
+    }
   });
 
   s.on('grantTime', () => {

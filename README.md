@@ -18,3 +18,9 @@ Node.js + Express + Socket.IO. Files: `server.js`, `package.json`, `public/index
 - **Neon-green flash** (3×) appears only for the player whose turn it is.
 - **Host**: pause/resume; kick players before a match starts. Offline players auto-play after 5 s.
 - **Fullscreen**: built-in fullscreen button on desktop and mobile.
+
+## v0.7 updates
+- **Fullscreen button**: accessible at all times from the top bar on desktop and mobile.
+- **Alternating color card sorting**: Auto-sort ensures cards of the same color never sit adjacent between suits (alternating Black ♠ -> Red ♥ -> Black ♣ -> Red ♦).
+- **Overlapping/Stacked card hand**: Hand cards fan with cascading overlap, allowing 20+ cards to be clearly viewed at once without vertical crowding. Hovering or tapping a card elevates it smoothly.
+- **Universal Pause & Vote**: Any player can pause or resume the match. In a 2-player match, the pause takes effect immediately without confirmation; in games with 3 or more players, an approval popup appears and requires at least one other player's permission.

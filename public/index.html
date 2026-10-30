@@ -2,797 +2,480 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>Party Blaster</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Donkey — Online Cards</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
-      --bg: #07151e;
-      --panel: #0d2330;
-      --gold: #f6c85f;
-      --accent: #26a69a;
-      --red: #e74c3c;
+      --felt: #0b503f;
+      --felt2: #07392f;
+      --gold: #e5c77a;
       --neon-green: #39ff14;
-      --text: #e8f1f5;
-      --border: #1f4256;
-      --felt-bg: radial-gradient(ellipse at center, #0e4f3c, #06261d);
+      --ink: #17221e;
+      --red: #e74c3c;
     }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body {
+    * { box-sizing: border-box; }
+    body {
       margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      height: 100dvh;
-      overflow: hidden;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      user-select: none;
-      touch-action: manipulation;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #071e19;
+      color: #f4f3e8;
     }
-    .app-root {
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      height: 100%;
-      height: 100dvh;
-      overflow: hidden;
-    }
-    header.bar {
-      flex: 0 0 auto;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 6px 12px;
-      background: #040c12;
-      border-bottom: 1px solid var(--border);
-      z-index: 10;
-    }
-    .brand { font-size: 18px; font-weight: 900; color: var(--gold); letter-spacing: .03em; }
-    .brand span { color: #fff; }
-    .btn {
-      background: var(--gold);
-      color: #0d2330;
+    button, input, select { font: inherit; }
+    button {
       border: 0;
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 12px;
+      border-radius: 10px;
+      padding: 10px 14px;
       font-weight: 700;
       cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      transition: filter 0.15s, transform 0.08s;
-      white-space: nowrap;
+      background: var(--gold);
+      color: #17221e;
+      transition: filter 0.15s ease;
     }
-    .btn:active { transform: scale(0.96); }
-    .btn:hover { filter: brightness(1.1); }
-    .btn-secondary { background: #1f4256; color: #fff; }
-    .btn-danger { background: var(--red); color: #fff; }
-    .btn-success { background: #2ecc71; color: #fff; }
-    .btn-action { background: #34495e; color: #f1f2f6; border: 1px solid #4b6584; }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-danger { background: var(--red); color: white; }
+    .btn-secondary { background: #285347; color: white; }
+    .app { max-width: 1200px; margin: auto; padding: 20px; }
+    .hero { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .brand { font-size: 28px; font-weight: 900; letter-spacing: .04em; }
+    .brand span { color: var(--gold); }
+    .panel { background: #102e26; border: 1px solid #285347; border-radius: 16px; padding: 16px; margin: 14px 0; }
+    .setup { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 6px; color: #d4e2da; font-size: 13px; }
+    .field input, .field select { background: #071e19; color: white; border: 1px solid #42665a; border-radius: 9px; padding: 11px; }
+    .muted { color: #a9c2b6; font-size: 13px; }
     .hidden { display: none !important; }
 
-    /* Scrollable lobby container */
-    .lobby-container {
-      flex: 1 1 auto;
-      overflow-y: auto;
-      padding: 14px;
-      max-width: 900px;
-      margin: 0 auto;
-      width: 100%;
-    }
-    .portal-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 12px;
-      margin: 12px 0;
-    }
-    .game-card {
-      background: var(--panel);
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      padding: 14px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-    .game-card.active, .game-card:hover {
-      border-color: var(--gold);
-      box-shadow: 0 0 10px rgba(246, 200, 95, 0.2);
-    }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px;
-      margin-bottom: 12px;
-    }
-    .field {
+    /* Center Timer Bar */
+    .timer-bar {
       display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-bottom: 10px;
-      font-size: 13px;
-    }
-    input, select {
-      background: #051017;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 10px;
-      color: #fff;
-      font: inherit;
-    }
-
-    /* Timer Badge */
-    .timer-badge {
-      display: inline-flex;
       align-items: center;
-      gap: 4px;
-      background: #09201a;
-      border: 1px solid var(--neon-green);
-      color: var(--neon-green);
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
+      justify-content: center;
+      gap: 10px;
+      font-size: 16px;
       font-weight: 800;
+      letter-spacing: .03em;
+      background: #09261f;
+      border: 1px solid #2a6152;
+      border-radius: 12px;
+      padding: 8px 16px;
+      margin-bottom: 12px;
+      color: #f7e7ac;
     }
-    .timer-badge.urgent {
-      border-color: var(--red);
-      color: #ff7675;
-      animation: pulseUrgent 0.8s infinite alternate;
+    .timer-bar.urgent {
+      color: #ff5252;
+      border-color: #ff5252;
+      animation: pulseUrgent .8s infinite alternate;
     }
     @keyframes pulseUrgent {
       from { transform: scale(1); }
-      to { transform: scale(1.05); }
+      to { transform: scale(1.02); }
     }
 
-    /* ============================================================
-       MOBILE-OPTIMIZED SINGLE-SCREEN GAME CONTAINER
-       ============================================================ */
-    .game-arena {
-      flex: 1 1 auto;
-      display: flex;
-      flex-direction: column;
-      height: calc(100% - 45px);
-      width: 100%;
-      overflow: hidden;
-      padding: 4px 6px;
-      gap: 4px;
-    }
-
-    /* Compact Info / Top Bar */
-    .game-top-bar {
-      flex: 0 0 auto;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #091b24;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 4px 8px;
-      font-size: 12px;
-      gap: 6px;
-    }
-    .game-top-bar .info-text {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* Table Felt - Piles Area */
-    .table-felt-area {
-      flex: 1 1 auto;
-      background: var(--felt-bg);
-      border: 2px solid #1f6954;
-      border-radius: 12px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      align-items: center;
-      padding: 6px;
-      position: relative;
-      min-height: 0; /* Prevents overflow from pushing hand down */
-      overflow: hidden;
-    }
-
-    /* Rummy Piles Layout */
-    .piles-row {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 16px;
-      margin: auto 0;
-      z-index: 2;
-    }
-    .pile-box {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-    }
-    .pile-label {
-      font-size: 10px;
-      font-weight: 800;
-      color: #b5d5ca;
-      letter-spacing: .04em;
-      text-transform: uppercase;
-    }
-    .card-pile {
-      width: 54px;
-      height: 76px;
-      border-radius: 6px;
-      border: 2px dashed var(--gold);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      cursor: pointer;
-      font-weight: 800;
-      background: #082018;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      position: relative;
-      transition: transform .1s;
-    }
-    .card-pile:active { transform: scale(0.96); }
-    .card-pile.active {
-      border-style: solid;
-      background: #0e3b2c;
-      box-shadow: 0 0 10px var(--gold);
-    }
-    .card-pile.joker-slot {
-      border-color: #2ecc71;
-      background: #0a2920;
-    }
-
-    /* Opponents status mini-carousel/chips */
-    .opponents-strip {
-      flex: 0 0 auto;
-      width: 100%;
-      display: flex;
-      gap: 4px;
-      overflow-x: auto;
-      padding: 2px;
-      white-space: nowrap;
-      scrollbar-width: none;
-    }
-    .opponents-strip::-webkit-scrollbar { display: none; }
-    .player-chip {
-      background: rgba(9, 32, 26, 0.85);
-      border: 1px solid #1f5042;
-      border-radius: 12px;
-      padding: 2px 8px;
-      font-size: 10px;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      flex: 0 0 auto;
-    }
-    .player-chip.active-turn {
-      border-color: var(--neon-green);
-      color: var(--neon-green);
-      font-weight: bold;
-    }
-
-    /* ============================================================
-       PLAYER HAND & 13-CARD VIEWPORT FITTING
-       ============================================================ */
-    .hand-section {
-      flex: 0 0 auto;
-      background: #091b24;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 4px 6px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .hand-action-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: nowrap;
-      gap: 4px;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .hand-action-bar::-webkit-scrollbar { display: none; }
-    .action-group-left, .action-group-right {
-      display: flex;
-      gap: 4px;
-      align-items: center;
-    }
-
-    /* The container for all groups / 13 cards */
-    .groups-wrapper {
-      display: flex;
-      align-items: flex-end;
-      gap: 6px;
-      width: 100%;
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding: 6px 2px 2px 2px;
-      min-height: 94px;
-      scrollbar-width: none;
-    }
-    .groups-wrapper::-webkit-scrollbar { display: none; }
-
-    /* Each meld / card group container */
-    .card-group {
-      display: inline-flex;
-      align-items: flex-end;
-      background: rgba(14, 46, 37, 0.4);
-      border: 1px dashed rgba(246, 200, 95, 0.35);
-      border-radius: 6px;
-      padding: 2px 4px 2px 2px;
-      position: relative;
-      flex: 0 0 auto;
-      height: 84px;
-    }
-    .group-label {
-      position: absolute;
-      top: -6px;
-      left: 4px;
-      font-size: 8px;
-      font-weight: 800;
-      color: var(--gold);
-      background: #05141c;
-      padding: 0 4px;
-      border-radius: 4px;
-      border: 1px solid rgba(246, 200, 95, 0.3);
-      z-index: 10;
-    }
-
-    /* Responsive Playing Cards with Cascading Overlap */
-    .card {
-      width: 48px;
-      height: 72px;
-      background: #fffdf5;
-      color: #111;
-      border-radius: 5px;
-      border: 1px solid #cfcbbe;
-      padding: 3px 4px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      cursor: pointer;
-      position: relative;
-      font-weight: 900;
-      flex: 0 0 48px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
-      transition: transform 0.1s ease, border-color 0.1s ease;
-      touch-action: manipulation;
-    }
-    /* Negative margin to cascade 13 cards across width */
-    .card-group .card:not(:first-child) {
-      margin-left: -26px; /* Cascading fan overlap to fit all 13 cards */
-    }
-    .card.red { color: #d63031; }
-    .card.selected {
-      transform: translateY(-12px);
-      border: 2px solid var(--gold);
-      box-shadow: 0 0 8px var(--gold);
-      z-index: 15;
-    }
-    .card .top-rank { font-size: 11px; line-height: 1; }
-    .card .suit-icon { font-size: 17px; text-align: center; line-height: 1; }
-    .card .bottom-rank { font-size: 11px; text-align: right; line-height: 1; }
-
-    /* Donkey Oval Felt View */
-    .donkey-table-container {
+    /* Table Seating & Neon Flash Animation */
+    .table-container {
       position: relative;
       background: #08261f;
-      border: 2px solid #1c5243;
-      border-radius: 16px;
-      width: 100%;
-      height: 100%;
+      border: 3px solid #1c5243;
+      border-radius: 28px;
+      padding: 65px 20px;
+      margin-bottom: 14px;
+      min-height: 460px;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      transition: border-color .3s, box-shadow .3s;
     }
-    .seats-ring { position: absolute; inset: 0; pointer-events: none; }
+
+    /* Fluorescent Green Flash 3 Times */
+    .table-container.turn-flash-thrice {
+      animation: flashNeonGreen 1.8s ease-in-out;
+    }
+    @keyframes flashNeonGreen {
+      0%, 100% {
+        border-color: #1c5243;
+        box-shadow: none;
+      }
+      16%, 50%, 84% {
+        border-color: var(--neon-green);
+        box-shadow: 0 0 35px var(--neon-green), inset 0 0 25px rgba(57, 255, 20, 0.4);
+      }
+      33%, 67% {
+        border-color: #1c5243;
+        box-shadow: none;
+      }
+    }
+
+    .seats-ring {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
     .player-seat {
       position: absolute;
       transform: translate(-50%, -50%);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
+      gap: 3px;
       z-index: 10;
       pointer-events: auto;
     }
     .seat-badge {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       background: #0f2e26;
-      border: 1px solid #285347;
-      border-radius: 12px;
-      padding: 2px 6px;
-      font-size: 10px;
+      border: 2px solid #285347;
+      border-radius: 20px;
+      padding: 4px 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      font-size: 12px;
       font-weight: 600;
     }
     .seat-badge.active-turn {
       border-color: var(--neon-green);
-      box-shadow: 0 0 8px var(--neon-green);
+      box-shadow: 0 0 14px var(--neon-green);
       background: #123d32;
     }
     .player-dot {
-      width: 8px;
-      height: 8px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
-      display: inline-block;
+      border: 2px solid #fff;
     }
-    .donkey-felt {
-      width: 70%;
-      min-height: 160px;
-      border-radius: 18px;
-      background: radial-gradient(ellipse at center, #0b503f, #07392f);
-      border: 2px solid #1f6954;
+    .kick-btn {
+      background: none;
+      border: none;
+      color: #ff8080;
+      cursor: pointer;
+      padding: 0 3px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .kick-btn:hover { color: #ff3333; }
+    .seat-cards-badge {
+      background: #1e453b;
+      color: var(--gold);
+      border-radius: 12px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .seat-timer-badge {
+      background: #0a1f19;
+      color: var(--neon-green);
+      border: 1px solid var(--neon-green);
+      border-radius: 10px;
+      padding: 1px 6px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    /* Table Felt & Center Trick */
+    .table-felt {
+      width: 68%;
+      min-height: 230px;
+      border-radius: 30px;
+      background: radial-gradient(ellipse at center, var(--felt), var(--felt2));
+      border: 3px solid #1f6954;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-wrap: wrap;
-      gap: 6px;
-      padding: 10px;
-      box-shadow: inset 0 0 20px #000a;
+      gap: 12px;
+      padding: 20px;
+      box-shadow: inset 0 0 35px #000a;
       z-index: 5;
     }
-
-    /* Modals & Popups */
-    .modal {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.85);
+    .played {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      z-index: 100;
-      padding: 14px;
-    }
-    .modal-content {
-      background: #0e2736;
-      border: 2px solid var(--gold);
-      border-radius: 12px;
-      padding: 18px;
-      max-width: 420px;
-      width: 100%;
-      text-align: center;
+      gap: 6px;
+      font-size: 12px;
       position: relative;
     }
-    .close-btn {
+    .played-tag {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #09201a;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+    }
+    .high-card-pill {
       position: absolute;
-      top: 8px;
-      right: 12px;
-      background: none;
-      border: none;
-      color: #fff;
-      font-size: 20px;
+      top: -12px;
+      background: linear-gradient(135deg, #ffd700, #ff9800);
+      color: #17221e;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 2px 7px;
+      border-radius: 999px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      letter-spacing: .05em;
+      z-index: 2;
+    }
+
+    /* Cards */
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 14px 0;
+      min-height: 105px;
+    }
+    .card {
+      width: 64px;
+      height: 90px;
+      background: #fffdf6;
+      color: #15241d;
+      border-radius: 9px;
+      border: 2px solid #dedbd1;
+      box-shadow: 0 3px 7px #0005;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 6px;
+      cursor: grab;
+      user-select: none;
+      transition: transform .08s, box-shadow .15s;
+    }
+    .card:active { cursor: grabbing; }
+    .card.red { color: #bd263a; }
+    .card.selected {
+      transform: translateY(-12px);
+      border: 3px solid var(--gold);
+      box-shadow: 0 0 0 3px #f6e5a0;
+    }
+    .card.highlighted-high {
+      border: 3px solid #ffcc00 !important;
+      box-shadow: 0 0 16px 4px #ffd700, 0 4px 10px #000;
+      transform: translateY(-4px) scale(1.06);
+    }
+    .card.drag-over {
+      border: 2px dashed var(--gold);
+      transform: scale(1.03);
+    }
+
+    .rank { font-size: 16px; font-weight: 900; line-height: 1; }
+    .suit { font-size: 25px; text-align: center; line-height: 1; }
+    .bottom { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .status { font-size: 14px; color: #f7e7ac; min-height: 22px; }
+    .tag { border: 1px solid #547e6e; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #cde0d5; }
+    .modal { background: #0b241d; border: 1px solid #b9a25c; border-radius: 14px; padding: 14px; margin-top: 12px; }
+    .small { font-size: 12px; }
+    .warn { color: #ffb7a9; margin-top: 6px; }
+    
+    .toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
       cursor: pointer;
-      font-weight: bold;
+      user-select: none;
+      background: #09221b;
+      padding: 7px 12px;
+      border-radius: 9px;
+      border: 1px solid #285347;
     }
-    .toast {
-      position: fixed;
-      bottom: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #e74c3c;
-      color: white;
-      padding: 8px 14px;
-      font-size: 12px;
-      border-radius: 6px;
-      z-index: 120;
-      white-space: nowrap;
+    .toggle-label input { cursor: pointer; accent-color: var(--gold); }
+    .hit { animation: flash .2s ease-out; }
+    @keyframes flash { from { filter: brightness(1.8); } to { filter: brightness(1); } }
+
+    @media (max-width: 760px) {
+      .table-felt { width: 92%; min-height: 180px; }
+      .table-container { padding: 85px 8px; }
+      .card { width: 52px; height: 76px; }
     }
-    .scroll-banner {
-      position: fixed;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #fdfdfd;
-      color: #111;
-      font-size: 12px;
-      font-weight: bold;
-      padding: 6px 14px;
-      border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      z-index: 110;
-      text-align: center;
-      max-width: 90vw;
+  
+    .card{position:relative}
+    .p1{position:absolute;top:3px;right:4px;font-style:normal;font-size:10px;color:#d4a000;text-shadow:0 0 2px #0003}
+    .popup{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:50;background:#0b241d;border:2px solid var(--gold);border-radius:14px;padding:12px 18px;box-shadow:0 8px 30px #000a;text-align:center;max-width:92vw}
+    .popup .cards{justify-content:center;margin:8px 0 0}
+    .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#7a2b22;color:#fff;padding:10px 16px;border-radius:10px;z-index:60}
+    .qrpanel{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+    .qrpanel img{background:#fff;border-radius:8px;padding:4px}
+    .bigcode{font-size:34px;font-weight:900;letter-spacing:.2em;color:var(--gold)}
+    #highBanner{font-size:14px}
+  
+    #scrollMsg{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:75;max-width:88vw;display:none;text-align:center;background:#fff;color:#222;
+      font-size:13px;font-weight:700;padding:6px 18px;border-radius:6px;box-shadow:0 3px 12px #0009;border-left:7px solid #d8d0bb;border-right:7px solid #d8d0bb}
+    #golden{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:80;pointer-events:none;text-align:center;padding:20px;
+      font-size:clamp(24px,7vw,64px);font-weight:900;color:#ffd700;text-shadow:0 0 14px #b8860b,0 3px 6px #000;animation:gpop .4s ease-out}
+    @keyframes gpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+    #requestBox,#surrenderBox,#timeGrantBox,#offerBox,#exitBox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;width:min(420px,92vw);box-shadow:0 10px 40px #000c;text-align:center}
+    .cards .card{touch-action:pan-x}
+    /* Phones, portrait or landscape: table (dealt cards) and hand always share one screen */
+    @media (max-width:700px),(max-height:540px){
+      body.inplay{overflow:hidden}
+      body.inplay .app{height:100dvh;display:flex;flex-direction:column;padding:4px 6px;max-width:none}
+      body.inplay header.hero,body.inplay footer,body.inplay .qrpanel,body.inplay #results{display:none}
+      body.inplay #board{flex:1;min-height:0;display:flex;flex-direction:column}
+      body.inplay #board>.panel{margin:3px 0;padding:5px 8px;border-radius:10px;flex:none}
+      body.inplay .table-container{flex:1;min-height:0;height:auto;padding:34px 6px;margin:0 0 3px;border-radius:18px}
+      body.inplay .table-felt{min-height:0;width:68%;max-height:100%;overflow:auto;padding:6px;gap:6px;border-radius:16px;align-content:center}
+      body.inplay .timer-bar{padding:3px 10px;margin-bottom:3px;font-size:13px;flex:none}
+      .status{font-size:12px;min-height:0}
+      button{padding:6px 10px;font-size:12px}
+      .seat-badge{font-size:10px;padding:2px 6px;gap:4px}
+      .card{width:42px;height:60px;padding:3px;border-radius:6px}
+      .rank{font-size:12px}.suit{font-size:17px}
+      .cards{flex-wrap:nowrap;overflow-x:auto;min-height:0;margin:2px 0;padding-top:12px}
+      .cards .card{flex:0 0 auto}
+      .panel:has(#hand) .hero,.panel:has(#hand)>.muted.small{display:none}
+      .played-tag{font-size:9px}.high-card-pill{font-size:8px;top:-9px}
+      .toggle-label{padding:3px 8px;font-size:11px}
+      #highBanner{font-size:12px;padding:3px 8px;margin-bottom:3px}
     }
   </style>
 </head>
-<body onclick="handleUserInteraction()" ontouchstart="handleUserInteraction()">
-
-  <div class="app-root">
-    <header class="bar">
-      <div class="brand">🎉 PARTY <span>BLASTER</span></div>
-      <div style="display: flex; gap: 6px; align-items: center;">
-        <button class="btn btn-secondary" onclick="openQrModal()" id="qrNavBtn" title="View Room QR Code">📱 QR</button>
-        <button class="btn btn-secondary" onclick="toggleFullScreen()" title="Toggle Fullscreen">⛶</button>
-        <button class="btn btn-danger hidden" onclick="confirmExitToLobby()" id="exitLobbyBtn">Exit</button>
-        <div id="roomBadge" class="hidden" style="font-size: 11px; font-weight: 800; color: var(--gold);"></div>
+<body>
+  <div id="golden"></div>
+  <div id="exitBox" class="modal hidden"><p><strong>Leave this room and go back to the lobby?</strong></p><p class="muted small">If a match is running, your seat is played automatically and removed before the next deal.</p><button id="exitYes" class="btn-danger">Leave</button> <button id="exitNo" class="btn-secondary">Stay</button></div>
+  <div id="scrollMsg"></div>
+  <div id="lostBox" style="display:none;position:fixed;inset:0;z-index:95;background:#000d;align-items:center;justify-content:center;flex-direction:column;gap:18px;text-align:center;color:#fff">
+    <div style="font-size:72px">🫏</div>
+    <div style="font-size:clamp(28px,8vw,56px);font-weight:900;color:#ff8a80">You lost the game</div>
+    <div class="muted">You were the last player holding cards.</div>
+    <button id="lostClose">OK</button>
+  </div>
+    <div class="app">
+    <header class="hero">
+      <div>
+        <div class="brand">♠ DONKEY <span>ONLINE</span></div>
+        <div class="muted">Multiplayer card table</div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button id="fullscreenBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 13px;" onclick="toggleFullScreen()">⛶ Fullscreen</button>
+        <div id="roomTag" class="tag hidden"></div>
       </div>
     </header>
 
-    <div id="toast" class="toast hidden"></div>
-    <div id="scrollBanner" class="scroll-banner hidden"></div>
-
-    <!-- QR Code Modal (Universal) -->
-    <div id="qrModal" class="modal hidden">
-      <div class="modal-content">
-        <button class="close-btn" onclick="closeQrModal()">×</button>
-        <h3 style="color: var(--gold); margin: 0 0 6px 0;">📱 Scan to Join Room</h3>
-        <p id="qrCodeText" style="font-size: 24px; font-weight: 900; letter-spacing: 0.15em; color: var(--gold); margin: 6px 0;"></p>
-        <div style="display: flex; justify-content: center; margin: 10px 0;">
-          <img id="qrImage" alt="Join Room QR" style="background: #fff; padding: 6px; border-radius: 8px; width: 160px; height: 160px;">
-        </div>
-        <p class="muted" style="font-size: 12px; margin-bottom: 12px;">Scan with your phone's camera to join this table directly.</p>
-        <button class="btn btn-secondary" onclick="closeQrModal()">Close</button>
-      </div>
-    </div>
-
-    <!-- Hidden Joker Inspection Modal (Rummy) -->
-    <div id="jokerModal" class="modal hidden">
-      <div class="modal-content">
-        <button class="close-btn" onclick="closeJokerModal()">×</button>
-        <h3 style="color: var(--gold); margin-top: 0;" id="jokerModalTitle">🃏 Cut Joker Revealed!</h3>
-        <p id="jokerModalDesc" style="font-size: 13px; margin-bottom: 10px;"></p>
-        
-        <div style="display: flex; justify-content: center; margin: 10px 0;">
-          <div id="jokerCardBox" class="card" style="width: 64px; height: 92px; font-size: 14px;"></div>
-        </div>
-
-        <div style="font-weight: bold; color: #2ecc71; margin-bottom: 12px;" id="jokerTimerText">Closes in: 5s</div>
-        <button class="btn btn-secondary" onclick="closeJokerModal()">Close Now</button>
-      </div>
-    </div>
-
-    <!-- Invalid Declaration Prompt Modal (Rummy) -->
-    <div id="invalidDeclModal" class="modal hidden">
-      <div class="modal-content">
-        <h3 style="color: #ff7675; margin-top: 0;">⚠️ Invalid Declaration</h3>
-        <p id="invalidDeclMsg" style="font-size: 13px;">Your declaration does not meet requirements. Ensure at least 1 Pure Sequence/Sikkan and 1 Secondary Sequence (7+ cards total).</p>
-        <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px;">
-          <button class="btn" onclick="closeInvalidDeclModal()">Rearrange</button>
-          <button class="btn btn-secondary" onclick="discardFromDecl()">Discard & Continue</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Card Request Modal (Donkey) -->
-    <div id="requestModal" class="modal hidden">
-      <div class="modal-content">
-        <h3>🃏 Card Request</h3>
-        <p id="requestModalMsg">A player is requesting all your cards!</p>
-        <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px;">
-          <button class="btn btn-success" onclick="respondRequest(true)">Pass Cards</button>
-          <button class="btn btn-danger" onclick="respondRequest(false)">Decline</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Surrender Modal (Donkey) -->
-    <div id="surrenderModal" class="modal hidden">
-      <div class="modal-content">
-        <h3>🏳 Surrender Offer</h3>
-        <p id="surrenderModalMsg">A player is offering to surrender and become the Donkey.</p>
-        <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px;">
-          <button class="btn btn-success" onclick="respondSurrender(true)">Accept</button>
-          <button class="btn btn-secondary" onclick="respondSurrender(false)">Decline</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ============================================================
-         PORTAL / LOBBY SCREEN
-         ============================================================ -->
-    <section id="portalView" class="lobby-container">
-      <h2>Select Your Game</h2>
-      <div class="portal-grid">
-        <div class="game-card active" id="card-rummy" onclick="setGame('rummy')">
-          <h3>🂡 20-Player Rummy</h3>
-          <p style="font-size: 13px; color: #a4b0be;">13 cards, 3–6 decks, Sikkan triplets, drop options, and dynamic auto-play timers.</p>
-        </div>
-        <div class="game-card" id="card-donkey" onclick="setGame('donkey')">
-          <h3>🫏 Donkey</h3>
-          <p style="font-size: 13px; color: #a4b0be;">Trick-taking shedding game with HIT whips, Ace of Spades opening, and elimination.</p>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h3 style="margin-top:0;">Create or Join Table</h3>
+    <section id="lobby" class="panel">
+      <h2>Join a table</h2>
+      <div class="setup">
+        <label class="field">Your name
+          <input id="name" maxlength="24" placeholder="Enter your name (required)" value="" autocomplete="nickname">
+        </label>
+        <label class="field">Deck type
+          <select id="deck">
+            <option value="16">16 cards (Ace to Jack)</option>
+            <option value="32">32 cards (Ace to 7)</option>
+            <option value="52" selected>52 cards (single deck)</option>
+            <option value="104">104 cards (double deck)</option>
+          </select>
+        </label>
         <div class="field">
-          <label>Your Display Name</label>
-          <input id="playerName" placeholder="e.g. CardMaster">
+          <span>Create a new table</span>
+          <button id="create">Create room</button>
         </div>
-
-        <!-- Rummy Options -->
-        <div id="rummyOptions">
-          <div class="field">
-            <label>Number of Decks (3 to 6)</label>
-            <select id="deckCount">
-              <option value="3">3 Decks (Small party)</option>
-              <option value="4" selected>4 Decks (Up to 12 players)</option>
-              <option value="5">5 Decks (Up to 16 players)</option>
-              <option value="6">6 Decks (Up to 20 players)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Printed Jokers Per Deck</label>
-            <select id="jokersPerDeck">
-              <option value="2" selected>2 Printed Jokers per deck (Default)</option>
-              <option value="3">3 Printed Jokers per deck</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Joker Mode</label>
-            <select id="jokerType">
-              <option value="hidden" selected>Hidden Joker (Inspected via pure sequence/sikkan)</option>
-              <option value="open">Open Joker</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Donkey Options -->
-        <div id="donkeyOptions" class="hidden">
-          <div class="field">
-            <label>Deck Type</label>
-            <select id="donkeyDeckSize">
-              <option value="16">16 cards (Ace to Jack)</option>
-              <option value="32">32 cards (Ace to 7)</option>
-              <option value="52" selected>52 cards (single deck)</option>
-              <option value="104">104 cards (double deck)</option>
-            </select>
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
-          <button class="btn" onclick="createRoom()">Create Room</button>
-          <input id="joinCode" placeholder="ROOM CODE" style="width: 110px; text-transform: uppercase;">
-          <button class="btn btn-secondary" onclick="joinRoom()">Join Room</button>
+        <label class="field">Room code
+          <input id="code" maxlength="6" placeholder="e.g. ABC" style="text-transform:uppercase">
+        </label>
+        <div class="field">
+          <span>Join existing table</span>
+          <button id="join">Join room</button>
         </div>
       </div>
+      <div id="error" class="warn"></div>
     </section>
 
-    <!-- ============================================================
-         LIVE GAME VIEWPORT (Fits 100% of Screen)
-         ============================================================ -->
-    <section id="gameView" class="game-arena hidden">
-      <!-- Game Top Info Bar -->
-      <div class="game-top-bar">
-        <div class="info-text">
-          <span id="turnIndicator" style="font-weight: 800;">Waiting for host...</span>
-          <span id="turnTimerBadge" class="timer-badge hidden">⏳ 20s</span>
+    <section id="board" class="hidden">
+      <div class="panel hero">
+        <div>
+          <div class="tag" id="phaseTag">Lobby</div>
+          <div class="status" id="status">Waiting for players…</div>
         </div>
-        <div style="display: flex; gap: 4px; align-items: center;">
-          <button id="startBtn" class="btn hidden" onclick="socket.emit('startGame')">Start</button>
-          <button id="dropBtn" class="btn btn-danger hidden" onclick="dropRummy()">Drop</button>
-          
-          <label id="whipWrap" class="hidden" style="display: flex; align-items: center; gap: 2px; font-size: 11px; cursor: pointer;">
-            <input type="checkbox" id="whipToggle"> 🪢 Whip
+        <div class="bottom">
+          <button id="start">Deal & start</button>
+          <button id="exitBtn" class="btn-secondary">Exit room</button>
+          <button id="sound">Sound: on</button>
+          <button id="callOff" class="btn-danger hidden">Call Off / New Game</button>
+        </div>
+      </div>
+
+      <!-- Universal Turn Countdown Display -->
+      <div id="turnTimerDisplay" class="timer-bar hidden">
+        <span id="turnTimerIcon">⏳</span>
+        <span id="turnTimerText">Turn Timer: 50s</span>
+      </div>
+
+      <div id="highBanner" class="timer-bar hidden"></div>
+
+      <!-- Oval Table Seating Area with Fluorescent Green Flash -->
+      <div class="table-container" id="tableContainer">
+        <div class="seats-ring" id="seatsRing"></div>
+        <div class="table-felt" id="table">
+          <span class="muted">Cards played this round appear here</span>
+        </div>
+      </div>
+
+      <!-- Hand Management -->
+      <div class="panel">
+        <div class="hero">
+          <h3>Your hand</h3>
+          <span class="muted" id="handCount"></span>
+        </div>
+        
+        <div class="cards" id="hand"></div>
+        
+        <div class="bottom" style="margin-top: 10px;">
+          <button id="play">Deal selected card</button>
+          <button id="clear">Clear</button>
+
+          <!-- Auto-Sort Toggle -->
+          <label class="toggle-label">
+            <input type="checkbox" id="autoSortToggle">
+            <span>Auto-sort hand</span>
           </label>
-          <button id="requestBtn" class="btn btn-secondary hidden" onclick="requestDonkeyCards()">Req Cards</button>
-          <button id="surrenderBtn" class="btn btn-danger hidden" onclick="surrenderDonkey()">🏳</button>
+
+          <!-- Card Request Option for Trick Starter -->
+          <label id="whipWrap" class="toggle-label hidden"><input type="checkbox" id="whipToggle"> 🪢 Crack whip on this HIT</label>
+          <button id="surrenderBtn" class="btn-secondary hidden" title="Offer surrender"><svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle"><rect x="3" y="2" width="2.2" height="21" rx="1" fill="#8b5a2b"/><path d="M5.2 3Q10 1 14 3T22 3V12Q18 14 14 12T5.2 12Z" fill="#fff"/></svg> Surrender</button>
+          <div id="requestBar" style="display:inline-flex; align-items:center; gap:6px;">
+            <button id="request" class="btn-secondary">Request all cards from next player</button>
+          </div>
         </div>
+        <div class="muted small" style="margin-top: 8px;">Drag cards to reorder, or drag one onto the table / double-tap it / select it and press Deal.</div>
+        <div id="surrenderBox" class="modal hidden"></div>
+        <div id="requestBox" class="modal hidden"></div>
+        <div id="timeGrantBox" class="modal hidden"></div>
       </div>
 
-      <!-- VIEW 1: RUMMY ARENA (Table Felt + Piles + Strip) -->
-      <div id="rummyViewContainer" style="display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 4px;">
-        <div class="table-felt-area" id="rummyTable">
-          <!-- Opponents chip carousel -->
-          <div class="opponents-strip" id="rummyPlayerList"></div>
+      <div class="panel qrpanel"><img id="qr" alt="Join QR" width="130" height="130"><div><div class="muted">Room code</div><div id="qrCode" class="bigcode"></div><div class="muted small">Scan to join. New players wait until the next match begins.</div><div id="waitList" class="small" style="margin-top:6px"></div></div></div>
+      <div id="results" class="panel hidden"></div>
 
-          <!-- Piles Row (Stock, Joker, Discard) -->
-          <div class="piles-row">
-            <!-- Closed Stock Pile -->
-            <div class="pile-box">
-              <span class="pile-label">Stock</span>
-              <div class="card-pile active" onclick="drawFromStock()">
-                <span style="font-size: 11px;">🂠 DRAW</span>
-                <span id="stockCount" style="font-size: 10px; color: var(--gold);">--</span>
-              </div>
-            </div>
-
-            <!-- Cut Joker Slot -->
-            <div class="pile-box">
-              <span class="pile-label">Wild Joker</span>
-              <div class="card-pile joker-slot" id="jokerDisplay">
-                <span id="jokerVal" style="font-size: 11px; color: #2ecc71;">HIDDEN</span>
-              </div>
-            </div>
-
-            <!-- Open Discard Pile -->
-            <div class="pile-box">
-              <span class="pile-label">Discard</span>
-              <div class="card-pile" id="discardPile" onclick="drawFromDiscard()">
-                <div id="topDiscardCard" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;">--</div>
-              </div>
-            </div>
-          </div>
-
-          <div id="rummyStatusNote" style="font-size: 11px; color: var(--gold); text-align: center; min-height: 14px;"></div>
-        </div>
-
-        <!-- Rummy Hand Management & Grouping -->
-        <div class="hand-section">
-          <div class="hand-action-bar">
-            <div class="action-group-left">
-              <button class="btn btn-action" onclick="sortHand()" title="Sort hand by suits and values">🔀 Sort</button>
-              <button class="btn btn-action" onclick="groupSelectedCards()" title="Group selected cards together">🗂 Group</button>
-              <button class="btn btn-action" onclick="ungroupAllCards()" title="Ungroup all cards">Ungroup</button>
-              <button class="btn btn-secondary" onclick="unlockPureSequence()">✨ Reveal Pure</button>
-            </div>
-            <div class="action-group-right">
-              <button class="btn" style="background:#e67e22; color:#fff;" onclick="discardRummyCard()">Discard</button>
-              <button class="btn btn-success" onclick="declareRummy()">Show</button>
-            </div>
-          </div>
-          <!-- All 13 cards rendered inside cascading groups to fit screen -->
-          <div class="groups-wrapper" id="rummyGroupsWrapper"></div>
-        </div>
+      <!-- Host Controls -->
+      <div class="panel bottom" style="justify-content: flex-end;">
+        <button id="pauseBtn" class="btn-secondary hidden">Pause Game</button>
       </div>
-
-      <!-- VIEW 2: DONKEY ARENA -->
-      <div id="donkeyViewContainer" class="hidden" style="display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 4px;">
-        <div class="donkey-table-container" id="donkeyTableContainer">
-          <div class="seats-ring" id="donkeySeatsRing"></div>
-          <div class="donkey-felt" id="donkeyFelt">
-            <span style="color: #a9c2b6; font-size: 12px;">Cards played this trick appear here</span>
-          </div>
-        </div>
-
-        <div class="hand-section">
-          <div class="hand-action-bar">
-            <span style="font-size: 12px; font-weight: 700;">Your Cards</span>
-            <button class="btn" onclick="playDonkeyCard()">Play Selected Card</button>
-          </div>
-          <div class="groups-wrapper" id="donkeyHand"></div>
-        </div>
-      </div>
-
     </section>
+
+    <footer class="muted small">Donkey Online • 50s/15s adaptive timer • Offline/inactive players are pruned before a new deal</footer>
   </div>
 
   <script>
-    const socket = io();
-    let currentRoomCode = null;
-    let selectedGame = 'rummy';
-    let activeGameType = 'rummy';
-    let gameState = null;
-    let selectedCards = new Set();
-    let jokerTimerInterval = null;
-
-    // Local Hand Groups State: array of arrays of card objects
-    // e.g. [ [card1, card2, card3], [card4, card5] ]
-    let handGroups = [];
-
-    const SUIT_ORDER = { '♠': 1, '♥': 2, '♣': 3, '♦': 4, '★': 5 };
-
-    function handleUserInteraction() {
-      if (currentRoomCode && activeGameType === 'rummy') {
-        socket.emit('playerInteraction');
-      }
+    // Initialize Socket.io client
+    const socket = typeof io !== 'undefined' ? io() : null;
+    if (!socket) {
+      alert("Socket.io failed to load. Please check your internet connection.");
     }
 
-    function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.classList.remove('hidden');
-      setTimeout(() => t.classList.add('hidden'), 3500);
-    }
-
-    function showScroll(text, secs = 4) {
-      const b = document.getElementById('scrollBanner');
-      b.textContent = text;
-      b.classList.remove('hidden');
-      setTimeout(() => b.classList.add('hidden'), secs * 1000);
-    }
+    let state = null;
+    let me = null;
+    let previousTurn = null;
+    let selected = new Set();
+    let soundOn = true;
+    let audioCtx = null;
+    let autoSort = false;
+    let localHand = [];
+    let draggedCardId = null;
 
     function toggleFullScreen() {
       if (!document.fullscreenElement) {
@@ -802,556 +485,509 @@
       }
     }
 
-    function openQrModal() {
-      if (!currentRoomCode) return showToast('Create or join a room first.');
-      document.getElementById('qrCodeText').textContent = currentRoomCode;
-      document.getElementById('qrImage').src = `/qr/${currentRoomCode}`;
-      document.getElementById('qrModal').classList.remove('hidden');
-    }
+    const SUIT_ORDER = ['♠', '♥', '♦', '♣'];
+    const $ = id => document.getElementById(id);
+    function err(t) { $('error').textContent = t || ''; }
+    function name() { return $('name').value.trim().slice(0, 24); }
+    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-    function closeQrModal() {
-      document.getElementById('qrModal').classList.add('hidden');
-    }
-
-    function confirmExitToLobby() {
-      if (confirm('Leave this room and return to the lobby?')) {
-        socket.emit('leaveRoom');
-      }
-    }
-
-    socket.on('leftRoom', () => {
-      currentRoomCode = null;
-      gameState = null;
-      handGroups = [];
-      selectedCards.clear();
-      document.getElementById('portalView').classList.remove('hidden');
-      document.getElementById('gameView').classList.add('hidden');
-      document.getElementById('roomBadge').classList.add('hidden');
-      document.getElementById('exitLobbyBtn').classList.add('hidden');
-      document.getElementById('qrModal').classList.add('hidden');
-      showToast('Returned to lobby.');
-    });
-
-    function setGame(g) {
-      selectedGame = g;
-      document.getElementById('card-rummy').classList.toggle('active', g === 'rummy');
-      document.getElementById('card-donkey').classList.toggle('active', g === 'donkey');
-      document.getElementById('rummyOptions').classList.toggle('hidden', g !== 'rummy');
-      document.getElementById('donkeyOptions').classList.toggle('hidden', g !== 'donkey');
-    }
-
-    function createRoom() {
-      const name = document.getElementById('playerName').value.trim();
-      if (!name) return showToast('Please enter your name.');
-
-      let options = {};
-      if (selectedGame === 'rummy') {
-        options = {
-          deckCount: document.getElementById('deckCount').value,
-          jokersPerDeck: document.getElementById('jokersPerDeck').value,
-          jokerType: document.getElementById('jokerType').value
-        };
-      } else {
-        options = {
-          deckSize: document.getElementById('donkeyDeckSize').value
-        };
-      }
-
-      socket.emit('createRoom', { name, gameType: selectedGame, options });
-    }
-
-    function joinRoom() {
-      const name = document.getElementById('playerName').value.trim();
-      const code = document.getElementById('joinCode').value.trim();
-      if (!name || !code) return showToast('Please enter both name and code.');
-      socket.emit('joinRoom', { name, code });
-    }
-
-    socket.on('roomCreated', data => onJoined(data));
-    socket.on('joinedRoom', data => onJoined(data));
-    socket.on('errorMsg', msg => showToast(msg));
-    socket.on('scroll', data => showScroll(data.text, data.secs));
-
-    function onJoined({ code, gameType }) {
-      currentRoomCode = code;
-      activeGameType = gameType;
-      document.getElementById('portalView').classList.add('hidden');
-      document.getElementById('gameView').classList.remove('hidden');
-      document.getElementById('roomBadge').classList.remove('hidden');
-      document.getElementById('exitLobbyBtn').classList.remove('hidden');
-      document.getElementById('roomBadge').textContent = `ROOM: ${code}`;
-
-      document.getElementById('rummyViewContainer').classList.toggle('hidden', gameType !== 'rummy');
-      document.getElementById('donkeyViewContainer').classList.toggle('hidden', gameType !== 'donkey');
-    }
-
-    socket.on('lobbyUpdate', data => {
-      activeGameType = data.gameType;
-      const isHost = data.hostId === socket.id;
-      const startBtn = document.getElementById('startBtn');
-      startBtn.classList.toggle('hidden', !isHost);
-      document.getElementById('turnIndicator').textContent = `${data.gameType.toUpperCase()} | Players: ${data.players.length}`;
-    });
-
-    socket.on('dropNotice', ({ name, score }) => {
-      showToast(`${name} has dropped the round (${score} pts).`);
-    });
-
-    // Rummy dynamic tick
-    socket.on('rummyTick', ({ playerId, left, limit }) => {
-      const badge = document.getElementById('turnTimerBadge');
-      if (activeGameType === 'rummy' && gameState && gameState.phase === 'playing') {
-        badge.classList.remove('hidden');
-        badge.textContent = `⏳ ${left}s`;
-        badge.classList.toggle('urgent', left <= 5);
-      } else {
-        badge.classList.add('hidden');
-      }
-    });
-
-    // Donkey dynamic tick
-    socket.on('tick', ({ left, limit }) => {
-      const badge = document.getElementById('turnTimerBadge');
-      if (activeGameType === 'donkey' && gameState && gameState.phase === 'playing') {
-        badge.classList.remove('hidden');
-        badge.textContent = `⏳ ${left}s`;
-        badge.classList.toggle('urgent', left <= 8);
-      }
-    });
-
-    // Hidden Joker Inspection Modal Handling
-    socket.on('jokerInspectionBroadcast', ({ unlockedBy, cutJoker, allDuration, unlockerId, unlockerDuration }) => {
-      const isMe = socket.id === unlockerId;
-      const duration = isMe ? unlockerDuration : allDuration;
-
-      document.getElementById('jokerModalTitle').textContent = `🃏 Cut Joker Revealed!`;
-      document.getElementById('jokerModalDesc').textContent = isMe 
-        ? `You unlocked the Joker! You have ${duration}s to inspect it before resuming play.`
-        : `${unlockedBy} presented a Pure Sequence / Sikkan. Displaying Joker for ${duration}s.`;
-
-      const cardBox = document.getElementById('jokerCardBox');
-      cardBox.className = `card ${['♥', '♦'].includes(cutJoker.suit) ? 'red' : ''}`;
-      cardBox.innerHTML = renderCardHTML(cutJoker);
-
-      const modal = document.getElementById('jokerModal');
-      modal.classList.remove('hidden');
-
-      let remaining = duration;
-      document.getElementById('jokerTimerText').textContent = `Closes in: ${remaining}s`;
-
-      clearInterval(jokerTimerInterval);
-      jokerTimerInterval = setInterval(() => {
-        remaining--;
-        if (remaining <= 0) {
-          clearInterval(jokerTimerInterval);
-          closeJokerModal();
-        } else {
-          document.getElementById('jokerTimerText').textContent = `Closes in: ${remaining}s`;
-        }
-      }, 1000);
-    });
-
-    function closeJokerModal() {
-      clearInterval(jokerTimerInterval);
-      document.getElementById('jokerModal').classList.add('hidden');
-    }
-
-    socket.on('invalidDeclarationPrompt', ({ message }) => {
-      document.getElementById('invalidDeclMsg').textContent = message;
-      document.getElementById('invalidDeclModal').classList.remove('hidden');
-    });
-
-    function closeInvalidDeclModal() {
-      document.getElementById('invalidDeclModal').classList.add('hidden');
-    }
-
-    function discardFromDecl() {
-      closeInvalidDeclModal();
-      discardRummyCard();
-    }
-
-    socket.on('gameState', state => {
-      gameState = state;
-      activeGameType = state.gameType;
-
-      document.getElementById('rummyViewContainer').classList.toggle('hidden', state.gameType !== 'rummy');
-      document.getElementById('donkeyViewContainer').classList.toggle('hidden', state.gameType !== 'donkey');
-
-      if (state.gameType === 'rummy') {
-        syncRummyHandWithServer(state.hand || []);
-        renderRummyState(state);
-      } else {
-        renderDonkeyState(state);
-      }
-    });
-
-    // Sync incoming server hand cards with existing user-defined groups
-    function syncRummyHandWithServer(serverHand) {
-      const serverMap = new Map(serverHand.map(c => [c.id, c]));
-
-      if (handGroups.length === 0) {
-        // Initially place all cards into one clean group
-        handGroups = [serverHand.slice()];
+    $('create').onclick = () => {
+      err('');
+      if (!needName()) return;
+      if (!socket || !socket.connected) {
+        err('Connecting to server... Please wait a moment and try again.');
         return;
       }
+      socket.emit('create', { name: name(), deck: +$('deck').value });
+    };
 
-      // Keep cards in their assigned groups
-      const newGroups = [];
-      for (const group of handGroups) {
-        const kept = [];
-        for (const card of group) {
-          if (serverMap.has(card.id)) {
-            kept.push(serverMap.get(card.id));
-            serverMap.delete(card.id);
-          }
-        }
-        if (kept.length > 0) newGroups.push(kept);
+    $('join').onclick = () => {
+      err('');
+      if (!needName()) return;
+      if (!socket || !socket.connected) {
+        err('Connecting to server... Please wait a moment and try again.');
+        return;
       }
+      socket.emit('join', { name: name(), code: $('code').value });
+    };
 
-      // If new drawn card arrived, append to first group or create a fresh group
-      if (serverMap.size > 0) {
-        const remaining = Array.from(serverMap.values());
-        if (newGroups.length > 0) {
-          newGroups[0].push(...remaining);
-        } else {
-          newGroups.push(remaining);
-        }
-      }
-      handGroups = newGroups;
+    socket.on('created', x => {
+      $('code').value = x.code;
+      $('lobby').classList.add('hidden');$('board').classList.remove('hidden');
+      $('roomTag').classList.remove('hidden');$('roomTag').textContent = 'ROOM ' + x.code;
+      me = socket.id;
+    });
+
+    socket.on('errorMsg', t => { err(t); toast(t); });
+    socket.on('kicked', t => { alert(t); location.href = location.pathname; });
+    socket.on('tick', t => {
+      if (!state) return;
+      state.turnSecondsLeft = t.left; state.turnDuration = t.limit; renderTimer();
+      document.querySelectorAll('.seat-timer-badge').forEach(e => e.textContent = '⏳ ' + t.left + 's');
+    });
+    socket.on('passed', x => {
+      const d = document.createElement('div'); d.className = 'popup';
+      d.innerHTML = `<strong>${esc(x.from)}</strong> gave <strong>${esc(x.to)}</strong> ${x.count} card${x.count === 1 ? '' : 's'}` +
+        (x.cards ? `<div class="cards">${x.cards.map(c => `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : ''}">${face(c)}</div>`).join('')}</div>` : '');
+      document.body.appendChild(d); setTimeout(() => d.remove(), (x.secs || 8) * 1000);
+    });
+    function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3500); }
+    function face(c) {
+      const mark = state && state.double && c.pack === 0 ? '<i class="p1" title="First pack">●</i>' : '';
+      return `${mark}<span class="rank">${c.rank}</span><span class="suit">${c.suit}</span><span class="rank" style="text-align:right">${c.rank}</span>`;
     }
-
-    // ============================================================
-    // SORTING & GROUPING FUNCTIONS
-    // ============================================================
-    function sortHand() {
-      handleUserInteraction();
-      // Flatten hand cards, sort by Suit then by Rank value, then group by Suit
-      const allCards = handGroups.flat();
-      allCards.sort((a, b) => {
-        const sDiff = (SUIT_ORDER[a.suit] || 99) - (SUIT_ORDER[b.suit] || 99);
-        if (sDiff !== 0) return sDiff;
-        return a.val - b.val;
-      });
-
-      // Automatically group sorted cards by suit clusters
-      const suitBuckets = {};
-      allCards.forEach(c => {
-        const key = c.isPrintedJoker ? 'JOKER' : c.suit;
-        if (!suitBuckets[key]) suitBuckets[key] = [];
-        suitBuckets[key].push(c);
-      });
-
-      handGroups = Object.values(suitBuckets);
-      selectedCards.clear();
-      renderRummyState(gameState);
-      showToast('Hand sorted by suits!');
+    function renderTimer() {
+      const td = $('turnTimerDisplay');
+      if (state.phase === 'playing' && !state.paused && state.turn) {
+        td.classList.remove('hidden');
+        const ap = state.players.find(p => p.id === state.turn);
+        const nm = ap ? (ap.id === me ? 'Your' : ap.name + "'s") : "Player's";
+        const secs = state.turnSecondsLeft;
+        $('turnTimerText').textContent = state.settling ? `Settle up: ${nm} turn timer starts in ${secs}s` : state.opening ? `Ace of Spades auto-plays in ${secs}s` : `${nm} turn: ${secs}s left (${state.turnDuration}s total)`;
+        td.classList.toggle('urgent', secs <= 10 && !state.settling);
+      } else td.classList.add('hidden');
     }
-
-    function groupSelectedCards() {
-      handleUserInteraction();
-      if (selectedCards.size < 2) {
-        return showToast('Select at least 2 cards to form a group.');
-      }
-
-      const selectedList = [];
-      const remainingGroups = [];
-
-      // Extract selected cards from existing groups
-      for (const group of handGroups) {
-        const unselected = [];
-        for (const card of group) {
-          if (selectedCards.has(card.id)) {
-            selectedList.push(card);
-          } else {
-            unselected.push(card);
-          }
-        }
-        if (unselected.length > 0) remainingGroups.push(unselected);
-      }
-
-      // Add the new group
-      remainingGroups.push(selectedList);
-      handGroups = remainingGroups;
-      selectedCards.clear();
-      renderRummyState(gameState);
-      showToast(`Formed group of ${selectedList.length} cards!`);
+    function renderExtras() {
+      const mine = state.players.find(p => p.id === me);
+      if ($('qr').dataset.code !== state.code) { $('qr').src = '/qr/' + state.code; $('qr').dataset.code = state.code; }
+      $('qrCode').textContent = state.code;
+      const w = state.players.filter(p => p.wait);
+      $('waitList').innerHTML = w.length ? '<b>Waiting for next match:</b> ' + w.map(p => esc(p.name)).join(', ') : '';
+      const rs = $('results');
+      if (state.phase === 'finished') {
+        const dk = state.players.find(p => p.id === state.donkey);
+        rs.classList.remove('hidden');
+        rs.innerHTML = '<h3>Results</h3>' + state.players.filter(p => p.rank).sort((a, b) => a.rank - b.rank).map(p =>
+          `<div>${p.rank === 1 ? '🏆' : p.rank + '.'} <span class="player-dot" style="display:inline-block;background:${p.color}"></span> ${esc(p.name)}</div>`).join('') +
+          (dk ? `<div>🫏 <strong>${esc(dk.name)}</strong> is the Donkey</div>` : '');
+      } else rs.classList.add('hidden');
+      const inGame = mine && !mine.wait && mine.handCount > 0 && state.phase === 'playing';
+      $('surrenderBtn').classList.toggle('hidden', !(state.canSurrender && inGame && !state.surrender));
+      const box = $('surrenderBox'), sur = state.surrender;
+      if (sur && inGame && sur.by !== me) {
+        const by = state.players.find(p => p.id === sur.by);
+        box.classList.remove('hidden');
+        box.innerHTML = `<p>🏳 <strong>${esc(by ? by.name : 'A player')}</strong> offers to surrender. Approve?</p><button id="surYes">Approve</button> <button id="surNo" class="btn-secondary">Decline</button>`;
+        $('surYes').onclick = () => socket.emit('respondSurrender', { approve: true });
+        $('surNo').onclick = () => socket.emit('respondSurrender', { approve: false });
+      } else box.classList.add('hidden');
     }
+    $('surrenderBtn').onclick = () => { if (confirm('Offer to surrender? If approved you become the Donkey.')) socket.emit('surrender'); };
 
-    function ungroupAllCards() {
-      handleUserInteraction();
-      const allCards = handGroups.flat();
-      handGroups = [allCards];
-      selectedCards.clear();
-      renderRummyState(gameState);
-      showToast('All cards merged into single group.');
-    }
-
-    // ----------------------------------------------------
-    // RUMMY RENDERING
-    // ----------------------------------------------------
-    function renderRummyState(s) {
-      document.getElementById('startBtn').classList.add('hidden');
-      document.getElementById('dropBtn').classList.remove('hidden');
-      document.getElementById('requestBtn').classList.add('hidden');
-      document.getElementById('surrenderBtn').classList.add('hidden');
-      document.getElementById('whipWrap').classList.add('hidden');
-
-      document.getElementById('stockCount').textContent = `${s.stockCount} left`;
-      const jDisp = document.getElementById('jokerVal');
-      if (s.cutJoker) {
-        jDisp.textContent = s.cutJoker.isPrintedJoker ? '★ JKR' : `${s.cutJoker.rank}${s.cutJoker.suit}`;
-      } else {
-        jDisp.textContent = 'HIDDEN';
+    $('autoSortToggle').addEventListener('change', (e) => {
+      autoSort = e.target.checked;
+      if (autoSort) {
+        sortLocalHand();
+        syncHandOrderToServer();
       }
+      renderHand();
+    });
 
-      const disc = document.getElementById('topDiscardCard');
-      disc.innerHTML = s.topDiscard ? renderCardHTML(s.topDiscard) : '--';
-
-      const activeP = s.players.find(p => p.id === s.turn);
-      const isMyTurn = s.turn === socket.id;
-      document.getElementById('turnIndicator').textContent = isMyTurn ? '👉 YOUR TURN!' : `Turn: ${activeP ? activeP.name : 'Waiting...'}`;
-      document.getElementById('rummyStatusNote').textContent = s.winner ? `🏆 Winner: ${s.winner}!` : (s.phase === 'finished' ? 'Game Over' : '');
-
-      // Opponents strip
-      const pList = document.getElementById('rummyPlayerList');
-      pList.innerHTML = s.players.map(p => `
-        <div class="player-chip ${p.id === s.turn ? 'active-turn' : ''}">
-          <span>${p.name}</span>
-          <span style="color:var(--gold);">${p.cardCount}🂠</span>
-          ${!p.online ? '<span style="color:#ff7675;">off</span>' : ''}
-          ${p.dropped ? '<span style="color:#e74c3c;">Drop</span>' : ''}
-          ${p.hasPure ? '<span style="color:#2ecc71;">Pure</span>' : ''}
-        </div>
-      `).join('');
-
-      // Render Hand Groups with cascading 13-card view
-      const groupsContainer = document.getElementById('rummyGroupsWrapper');
-      groupsContainer.innerHTML = '';
-
-      handGroups.forEach((group, gIdx) => {
-        const groupEl = document.createElement('div');
-        groupEl.className = 'card-group';
-
-        const labelEl = document.createElement('div');
-        labelEl.className = 'group-label';
-        labelEl.textContent = `G${gIdx + 1} (${group.length})`;
-        groupEl.appendChild(labelEl);
-
-        group.forEach(c => {
-          const cardDiv = document.createElement('div');
-          cardDiv.className = `card ${['♥', '♦'].includes(c.suit) ? 'red' : ''} ${selectedCards.has(c.id) ? 'selected' : ''}`;
-          cardDiv.innerHTML = renderCardHTML(c);
-          cardDiv.onclick = (e) => {
-            e.stopPropagation();
-            handleUserInteraction();
-            if (selectedCards.has(c.id)) selectedCards.delete(c.id);
-            else selectedCards.add(c.id);
-            renderRummyState(gameState);
-          };
-          groupEl.appendChild(cardDiv);
-        });
-
-        groupsContainer.appendChild(groupEl);
+    const currentLead = () => (state && state.table && state.table.length ? state.leadSuit : null);
+    function sortLocalHand(lead = currentLead()) {
+      localHand.sort((a, b) => {
+        if (lead) { const lf = (b.suit === lead) - (a.suit === lead); if (lf !== 0) return lf; }
+        let suitDiff = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
+        if (suitDiff !== 0) return suitDiff;
+        return (b.value - a.value) || (b.pack - a.pack);
       });
     }
 
-    function drawFromStock() {
-      handleUserInteraction();
-      socket.emit('rummyDraw', { source: 'stock' });
+    function syncHandOrderToServer() {
+      if (socket) socket.emit('reorderHand', { cardIds: localHand.map(c => c.id) });
     }
 
-    function drawFromDiscard() {
-      handleUserInteraction();
-      socket.emit('rummyDraw', { source: 'discard' });
-    }
+    socket.on('starterAlert', () => {
+      beep(660, 0.15);
+      setTimeout(() => beep(880, 0.25), 180);
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    });
 
-    function discardRummyCard() {
-      handleUserInteraction();
-      const arr = Array.from(selectedCards);
-      if (arr.length !== 1) return showToast('Select exactly 1 card to discard.');
-      socket.emit('rummyDiscard', { cardId: arr[0] });
-      selectedCards.clear();
-    }
-
-    function dropRummy() {
-      handleUserInteraction();
-      if (confirm('Drop this round? (20 pts First Drop, 40 pts Middle Drop)')) {
-        socket.emit('rummyDrop');
+    socket.on('turnWarning', () => {
+      if (soundOn) {
+        beep(440, 0.1);
+        setTimeout(() => beep(440, 0.1), 180);
+        setTimeout(() => beep(440, 0.15), 360);
       }
+      if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 200]);
+    });
+
+    socket.on('allowTimePrompt', ({ forPlayer }) => {
+      const box = $('timeGrantBox');
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <p><strong>${esc(forPlayer)}</strong> has 10 seconds remaining! Allow +30s?</p>
+        <button id="approveTimeBtn">Allow 30s</button>
+        <button id="dismissTimeBtn" class="btn-secondary">Dismiss</button>
+      `;
+      $('approveTimeBtn').onclick = () => { socket.emit('grantTime'); box.classList.add('hidden'); };$('dismissTimeBtn').onclick = () => box.classList.add('hidden');
+    });
+
+    socket.on('state', s => {
+      if (state && s.reveal && s.notice && s.notice.startsWith('HIT!')) hitSound();
+
+      if (s.turn !== previousTurn) {
+        previousTurn = s.turn;
+        if (s.phase === 'playing' && s.turn === socket.id) triggerGreenFlashThrice();
+      }
+
+      state = s;
+      if (!me) me = socket.id;
+
+      $('lobby').classList.add('hidden');$('board').classList.remove('hidden');
+      $('roomTag').classList.remove('hidden');$('roomTag').textContent = 'ROOM ' + s.code;
+
+      const serverHand = s.hand || [];
+      const serverMap = new Map(serverHand.map(c => [c.id, c]));
+
+      let updated = [];
+      for (const card of localHand) {
+        if (serverMap.has(card.id)) {
+          updated.push(serverMap.get(card.id));
+          serverMap.delete(card.id);
+        }
+      }
+      for (const newCard of serverMap.values()) updated.push(newCard);
+      localHand = updated;
+
+      if (autoSort) sortLocalHand(s.table && s.table.length ? s.leadSuit : null);
+      render();
+    });
+
+    function triggerGreenFlashThrice() {
+      const container = $('tableContainer');
+      container.classList.remove('turn-flash-thrice');
+      void container.offsetWidth;
+      container.classList.add('turn-flash-thrice');
     }
 
-    function unlockPureSequence() {
-      handleUserInteraction();
-      const arr = Array.from(selectedCards);
-      if (arr.length < 3) return showToast('Select at least 3 cards forming a Pure Sequence or Sikkan.');
-      socket.emit('rummyRevealPure', { groupCardIds: arr });
-    }
+    function render() {
+      if (!state) return;
+      $('phaseTag').textContent = (state.paused ? 'PAUSED • ' : '') + state.phase.toUpperCase() + ' • ' + (state.deckSize || 52) + ' CARDS';
+      $('status').textContent = state.notice || '';
+      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing' || state.phase === 'dealing';$('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
 
-    function declareRummy() {
-      handleUserInteraction();
-      const arr = Array.from(selectedCards);
-      if (arr.length === 0) return showToast('Select 1 card to discard as your show card.');
-      const discardCardId = arr[0];
+      renderTimer();
 
-      // Use user's formed groups for declaration!
-      const declGroups = handGroups.map(grp => 
-        grp.filter(c => c.id !== discardCardId).map(c => c.id)
-      ).filter(grp => grp.length > 0);
-
-      socket.emit('rummyDeclare', { groups: declGroups, discardCardId });
-    }
-
-    // ----------------------------------------------------
-    // DONKEY RENDERING
-    // ----------------------------------------------------
-    function renderDonkeyState(s) {
-      document.getElementById('startBtn').classList.add('hidden');
-      document.getElementById('dropBtn').classList.add('hidden');
-      document.getElementById('whipWrap').classList.remove('hidden');
-
-      const activeP = s.players.find(p => p.id === s.turn);
-      const isMyTurn = s.turn === socket.id;
-
-      document.getElementById('turnIndicator').textContent = isMyTurn ? `👉 YOUR TURN!` : `Turn: ${activeP ? activeP.name : 'Waiting'}`;
-
-      const canReq = isMyTurn && s.table.length === 0;
-      document.getElementById('requestBtn').classList.toggle('hidden', !canReq);
-      document.getElementById('surrenderBtn').classList.toggle('hidden', !s.canSurrender);
-
-      if (s.request && s.request.to === socket.id) {
-        const fromPlayer = s.players.find(p => p.id === s.request.from);
-        document.getElementById('requestModalMsg').textContent = `${fromPlayer ? fromPlayer.name : 'A player'} requests all your cards!`;
-        document.getElementById('requestModal').classList.remove('hidden');
+      const pauseBtn = $('pauseBtn');
+      if (state.hostId === me && state.phase === 'playing') {
+        pauseBtn.classList.remove('hidden');
+        pauseBtn.textContent = state.paused ? 'Resume Game' : 'Pause Game';
       } else {
-        document.getElementById('requestModal').classList.add('hidden');
+        pauseBtn.classList.add('hidden');
       }
 
-      if (s.surrender && s.surrender.by !== socket.id) {
-        const byPlayer = s.players.find(p => p.id === s.surrender.by);
-        document.getElementById('surrenderModalMsg').textContent = `${byPlayer ? byPlayer.name : 'A player'} offers to surrender and become the Donkey.`;
-        document.getElementById('surrenderModal').classList.remove('hidden');
-      } else {
-        document.getElementById('surrenderModal').classList.add('hidden');
-      }
+      const callOffBtn = $('callOff');
+      const mineP = state.players.find(p => p.id === me);
+      if (state.canVote && mineP && !mineP.wait) {
+        callOffBtn.classList.remove('hidden');
+        callOffBtn.textContent = `Request new game (${state.callOffVotes.length}/${state.voteNeed})`;
+      } else callOffBtn.classList.add('hidden');
 
-      const seatsEl = document.getElementById('donkeySeatsRing');
-      seatsEl.innerHTML = '';
-      const count = s.players.length;
-      const myIdx = Math.max(0, s.players.findIndex(p => p.id === socket.id));
+      document.body.classList.toggle('inplay', state.phase === 'playing' || state.phase === 'dealing');
+      renderLost();
+      renderExtras();
+      const aboutHit = state.phase === 'playing' && state.turn === me && state.table.length > 0 && !!state.leadSuit && !state.hand.some(c => c.suit === state.leadSuit);
+      $('whipWrap').classList.toggle('hidden', !aboutHit);
+      renderSeating();
+      renderTable();
+      renderHand();
 
-      s.players.forEach((p, idx) => {
-        const offset = (idx - myIdx + count) % count;
-        const angle = (offset / count) * 2 * Math.PI + Math.PI / 2;
-        const x = 50 + 44 * Math.cos(angle);
-        const y = 50 + 42 * Math.sin(angle);
+      $('play').disabled = state.phase !== 'playing' || state.turn !== me || selected.size !== 1 || state.paused || !!state.request || state.reveal;
+      const isLeadTurn = state.phase === 'playing' && state.turn === me && (!state.table || state.table.length === 0) && !state.paused;
+      $('request').disabled = !isLeadTurn || !!state.request || state.opening;
+
+      $('requestBox').classList.toggle('hidden', !state.request || state.request.to !== me);
+      if (state.request && state.request.to === me) renderRequest();
+    }
+
+    function renderSeating() {
+      const container = $('seatsRing');
+      container.innerHTML = '';
+      const players = state.players.filter(p => !p.wait);
+      const count = players.length;
+      if (!count) return;
+
+      const myIndex = Math.max(0, players.findIndex(p => p.id === me));
+
+      players.forEach((p, idx) => {
+        const offsetIndex = (idx - myIndex + count) % count;
+        const angle = (offsetIndex / count) * 2 * Math.PI + Math.PI / 2;
+        const rx = 44, ry = 42, cx = 50, cy = 50;
+        const x = cx + rx * Math.cos(angle);
+        const y = cy + ry * Math.sin(angle);
 
         const seat = document.createElement('div');
         seat.className = 'player-seat';
         seat.style.left = `${x}%`;
         seat.style.top = `${y}%`;
 
-        const isTurn = p.id === s.turn;
+        const isTurn = p.id === state.turn;
+        const canKick = state.hostId === me && p.id !== me && state.phase !== 'playing';
+
         seat.innerHTML = `
           <div class="seat-badge ${isTurn ? 'active-turn' : ''}">
-            <span class="player-dot" style="background:${p.color}"></span>
-            <span>${p.name} ${p.id === socket.id ? '(You)' : ''}</span>
-            <span style="color:var(--gold);">${p.handCount}🂠</span>
-            ${p.rank ? `<span>🏆#${p.rank}</span>` : ''}
-            ${s.donkey === p.id ? `<span>🫏</span>` : ''}
+            <span class="player-dot" style="background-color: ${p.color}"></span>
+            <span>${esc(p.name)} ${p.id === me ? '(You)' : ''}</span>
+            <span class="seat-cards-badge">${p.handCount} 🂠</span>
+            ${p.rank ? `<span class="seat-cards-badge">🏆${p.rank}</span>` : ''}${p.id === state.donkey ? '🫏' : ''}
+            ${isTurn && state.turnSecondsLeft !== undefined ? `<span class="seat-timer-badge">⏳ ${state.turnSecondsLeft}s</span>` : ''}
+            ${!p.online ? '<span class="muted" style="font-size:10px">offline</span>' : ''}
+            ${canKick ? `<button class="kick-btn" onclick="kickPlayer('${p.id}')" title="Kick player">×</button>` : ''}
           </div>
         `;
-        seatsEl.appendChild(seat);
+        container.appendChild(seat);
       });
+    }
 
-      const felt = document.getElementById('donkeyFelt');
-      felt.innerHTML = '';
-      if (!s.table || s.table.length === 0) {
-        felt.innerHTML = `<span style="color:#a9c2b6; font-size:12px;">Cards played this trick appear here</span>`;
-      } else {
-        s.table.forEach(item => {
-          const cardBox = document.createElement('div');
-          cardBox.style.display = 'flex';
-          cardBox.style.flexDirection = 'column';
-          cardBox.style.alignItems = 'center';
-          cardBox.style.gap = '2px';
+    window.kickPlayer = (id) => {
+      if (confirm('Kick this player?')) socket.emit('kick', { playerId: id });
+    };
 
-          const c = item.card;
-          const isHigh = s.highId === c.id;
-          cardBox.innerHTML = `
-            <div class="card ${['♥', '♦'].includes(c.suit) ? 'red' : ''}" style="${isHigh ? 'border: 2px solid var(--gold); box-shadow: 0 0 8px var(--gold);' : ''}">
-              ${renderCardHTML(c)}
-            </div>
-            <div style="font-size: 10px; background: rgba(0,0,0,0.5); padding: 1px 4px; border-radius: 4px;">
-              <span class="player-dot" style="background:${item.color}; width:6px; height:6px;"></span> ${item.name}
-            </div>
-          `;
-          felt.appendChild(cardBox);
-        });
+    function renderTable() {
+      const tableEl = $('table');
+      tableEl.innerHTML = '';
+
+      if (!state.table || state.table.length === 0) {
+        tableEl.innerHTML = '<span class="muted">Cards played this round appear here</span>';
+        $('highBanner').classList.add('hidden');
+        return;
       }
 
-      const handEl = document.getElementById('donkeyHand');
+      const sortedCards = [...state.table].sort((a, b) => a.card.value - b.card.value || b.card.pack - a.card.pack);
+      const highCardEntry = state.highId ? state.table.find(x => x.card.id === state.highId) : null;
+      const hb = $('highBanner');
+      if (highCardEntry) { hb.classList.remove('hidden'); hb.style.borderColor = highCardEntry.color; hb.innerHTML = `Highest ${esc(state.leadSuit)} card: <span class="player-dot" style="display:inline-block;background:${highCardEntry.color}"></span> <strong style="color:${highCardEntry.color}">${esc(highCardEntry.name || 'Player')}</strong>`; }
+
+      sortedCards.forEach(item => {
+        const isHigh = highCardEntry && highCardEntry.card.id === item.card.id;
+        const isRed = ['♥', '♦'].includes(item.card.suit);
+        const cardBox = document.createElement('div');
+        cardBox.className = 'played';
+        cardBox.innerHTML = `
+          ${isHigh ? '<div class="high-card-pill">HIGH CARD</div>' : ''}
+          <div class="card ${isRed ? 'red' : ''} ${isHigh ? 'highlighted-high' : ''}" style="cursor:default">
+            ${face(item.card)}
+          </div>
+          <div class="played-tag">
+            <span class="player-dot" style="width:8px; height:8px; background:${item.color}"></span>
+            <span>${esc(item.name || 'Player')}</span>
+          </div>
+        `;
+        tableEl.appendChild(cardBox);
+      });
+    }
+
+    function renderHand() {
+      const handEl = $('hand');
       handEl.innerHTML = '';
-      s.hand.forEach(c => {
-        const cardDiv = document.createElement('div');
-        cardDiv.className = `card ${['♥', '♦'].includes(c.suit) ? 'red' : ''} ${selectedCards.has(c.id) ? 'selected' : ''}`;
-        cardDiv.innerHTML = renderCardHTML(c);
-        cardDiv.onclick = (e) => {
-          e.stopPropagation();
-          if (selectedCards.has(c.id)) selectedCards.clear();
-          else {
-            selectedCards.clear();
-            selectedCards.add(c.id);
-          }
-          renderDonkeyState(gameState);
+      $('handCount').textContent = localHand.length + ' cards';
+
+      localHand.forEach((c, index) => {
+        const isRed = ['♥', '♦'].includes(c.suit);
+        const isSel = selected.has(c.id);
+
+        const card = document.createElement('div');
+        card.className = `card ${isRed ? 'red ' : ''}${isSel ? 'selected' : ''}`;
+        card.draggable = true;
+
+        card.innerHTML = `
+          ${face(c)}
+        `;
+
+        card.onclick = () => {
+          const now = Date.now();
+          if (lastTap.id === c.id && now - lastTap.t < 380) { lastTap = {}; playCard(c.id); return; }
+          lastTap = { id: c.id, t: now };
+          if (selected.has(c.id)) selected.delete(c.id);
+          else selected.add(c.id);
+          render();
         };
-        cardDiv.ondblclick = (e) => {
-          e.stopPropagation();
-          selectedCards.clear();
-          selectedCards.add(c.id);
-          playDonkeyCard();
+        card.addEventListener('touchstart', e => touchStart(e, c), { passive: true });
+        card.addEventListener('touchmove', touchMove, { passive: false });
+        card.addEventListener('touchend', touchEnd);
+        card.addEventListener('touchcancel', () => { if (tdrag && tdrag.ghost) tdrag.ghost.remove(); tdrag = null; });
+        card.ondragend = () => { draggedCardId = null; };
+
+        card.ondragstart = (e) => {
+          draggedCardId = c.id;
+          e.dataTransfer.effectAllowed = 'move';
         };
-        handEl.appendChild(cardDiv);
+
+        card.ondragover = (e) => { e.preventDefault(); card.classList.add('drag-over'); };
+        card.ondragleave = () => card.classList.remove('drag-over');
+        card.ondrop = (e) => {
+          e.preventDefault();
+          card.classList.remove('drag-over');
+          if (!draggedCardId || draggedCardId === c.id) return;
+          const fromIdx = localHand.findIndex(x => x.id === draggedCardId);
+          const toIdx = localHand.findIndex(x => x.id === c.id);
+          if (fromIdx < 0 || toIdx < 0) return;
+
+          autoSort = false;
+          $('autoSortToggle').checked = false;
+
+          const [movedCard] = localHand.splice(fromIdx, 1);
+          localHand.splice(toIdx, 0, movedCard);
+
+          renderHand();
+          syncHandOrderToServer();
+        };
+
+        handEl.appendChild(card);
       });
     }
 
-    function playDonkeyCard() {
-      const arr = Array.from(selectedCards);
-      if (arr.length !== 1) return showToast('Please select 1 card to play.');
-      const whip = document.getElementById('whipToggle').checked;
-      socket.emit('donkeyPlay', { cardId: arr[0], whip });
-      selectedCards.clear();
+    function renderRequest() {
+      let q = state.request, box = $('requestBox');
+      box.innerHTML = `
+        <h3>Card request</h3>
+        <p>${esc(state.players.find(p => p.id === q.from)?.name || 'A player')} requests <strong>all ${q.count} of your cards</strong>. (Auto-declines in 15s)</p>
+        <div class="bottom"><button id="approve">Approve</button><button id="decline" class="btn-secondary">Decline</button></div>`;
+      $('approve').onclick = () => socket.emit('respondRequest', { approve: true });
+      $('decline').onclick = () => socket.emit('respondRequest', { approve: false });
     }
 
-    function requestDonkeyCards() {
-      socket.emit('donkeyRequestCards');
-    }
+    $('start').onclick = () => { socket.emit('start'); selected.clear(); };
+    $('play').onclick = () => {
+      let id = [...selected][0];
+      if (id) socket.emit('play', { cardId: id, whip: whipOn() });
+      selected.clear();
+    };
+    $('clear').onclick = () => { selected.clear(); render(); };
+    $('request').onclick = () => socket.emit('requestCards', {});
+    $('sound').onclick = () => {
+      soundOn = !soundOn;
+      $('sound').textContent = 'Sound: ' + (soundOn ? 'on' : 'off');
+    };
 
-    function respondRequest(approve) {
-      socket.emit('donkeyRespondRequest', { approve });
-      document.getElementById('requestModal').classList.add('hidden');
-    }
-
-    function surrenderDonkey() {
-      if (confirm('Offer to surrender? If approved you will become the Donkey.')) {
-        socket.emit('donkeySurrender');
+    $('pauseBtn').onclick = () => {
+      if (confirm('Are you sure you want to pause/resume the game?')) {
+        socket.emit('togglePause');
       }
-    }
+    };
 
-    function respondSurrender(approve) {
-      socket.emit('donkeyRespondSurrender', { approve });
-      document.getElementById('surrenderModal').classList.add('hidden');
-    }
-
-    function renderCardHTML(c) {
-      if (c.isPrintedJoker) {
-        return `<div class="top-rank">★</div><div class="suit-icon" style="font-size:14px;">JKR</div><div class="bottom-rank">★</div>`;
+    $('callOff').onclick = () => {
+      if (confirm('Vote to call off the current game?')) {
+        socket.emit('voteCallOff');
       }
-      return `
-        <div class="top-rank">${c.rank}</div>
-        <div class="suit-icon">${c.suit}</div>
-        <div class="bottom-rank">${c.rank}</div>
-      `;
+    };
+
+    function beep(freq, duration) {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        let osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
     }
+
+    let lastTap = {}, tdrag = null;
+    const whipOn = () => !$('whipWrap').classList.contains('hidden') && $('whipToggle').checked;
+    try { $('whipToggle').checked = localStorage.getItem('donkeyWhip') === '1'; } catch (e) {}
+    $('whipToggle').onchange = () => { try { localStorage.setItem('donkeyWhip', $('whipToggle').checked ? '1' : '0'); } catch (e) {} };
+    socket.on('whip', () => { if (soundOn) whip(); });
+    socket.on('scroll', x => {
+      const d = $('scrollMsg'); d.textContent = x.text; d.style.display = 'block';
+      clearTimeout(d._t); d._t = setTimeout(() => d.style.display = 'none', (x.secs || 4) * 1000);
+    });
+    function flick() {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const c = audioCtx, t = c.currentTime, n = Math.floor(c.sampleRate * 0.04), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.5);
+        const src = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
+        src.buffer = buf; bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 0.8; g.gain.value = 0.5;
+        src.connect(bp); bp.connect(g); g.connect(c.destination); src.start(t);
+      } catch (e) {}
+    }
+    
+    function playCard(id) {
+      if (!state || state.phase !== 'playing' || state.turn !== me) return toast('Wait for your turn.');
+      socket.emit('play', { cardId: id, whip: whipOn() }); selected.clear();
+    }
+    function touchStart(e, c) { const t = e.touches[0]; tdrag = { id: c.id, x: t.clientX, y: t.clientY, ghost: null, el: e.currentTarget }; }
+    function touchMove(e) {
+      if (!tdrag) return;
+      const t = e.touches[0], dx = t.clientX - tdrag.x, dy = t.clientY - tdrag.y;
+      if (!tdrag.ghost) {
+        if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
+          const g = tdrag.el.cloneNode(true);
+          g.style.cssText = 'position:fixed;z-index:90;pointer-events:none;opacity:.85;transform:scale(1.15)';
+          document.body.appendChild(g); tdrag.ghost = g;
+        } else return;
+      }
+      e.preventDefault();
+      tdrag.ghost.style.left = (t.clientX - 21) + 'px'; tdrag.ghost.style.top = (t.clientY - 30) + 'px';
+    }
+    function touchEnd(e) {
+      if (!tdrag) return;
+      if (tdrag.ghost) {
+        const t = e.changedTouches[0]; tdrag.ghost.remove();
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && el.closest('#tableContainer')) playCard(tdrag.id);
+      }
+      tdrag = null;
+    }
+    $('tableContainer').ondragover = e => e.preventDefault();
+    $('tableContainer').ondrop = e => { e.preventDefault(); if (draggedCardId) playCard(draggedCardId); draggedCardId = null; };
+    function needName() {
+      const n = name();
+      if (!n) { err('Please enter your name first.'); toast('Name is required'); $('name').focus(); return false; }
+      try { localStorage.setItem('donkeyName', n); } catch (e) {}
+      return true;
+    }
+    socket.on('golden', x => {
+      const g = $('golden'); g.textContent = x.text; g.style.display = 'flex';
+      clearTimeout(g._t); g._t = setTimeout(() => g.style.display = 'none', (x.secs || 3) * 1000);
+    });
+    socket.on('left', () => { location.href = location.pathname; });
+    $('exitBtn').onclick = () => $('exitBox').classList.remove('hidden');
+    $('exitNo').onclick = () => $('exitBox').classList.add('hidden');
+    $('exitYes').onclick = () => { socket.emit('leave'); setTimeout(() => { location.href = location.pathname; }, 400); };
+
+    function whip() {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const c = audioCtx, t = c.currentTime;
+        const o = c.createOscillator(), og = c.createGain();
+        o.type = 'sawtooth'; o.frequency.setValueAtTime(250, t); o.frequency.exponentialRampToValueAtTime(3200, t + 0.11);
+        og.gain.setValueAtTime(0.0001, t); og.gain.linearRampToValueAtTime(0.07, t + 0.08); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+        o.connect(og); og.connect(c.destination); o.start(t); o.stop(t + 0.13);
+        const n = Math.floor(c.sampleRate * 0.22), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 5);
+        const src = c.createBufferSource(), hp = c.createBiquadFilter(), g = c.createGain();
+        src.buffer = buf; hp.type = 'highpass'; hp.frequency.value = 1500; g.gain.value = 0.9;
+        src.connect(hp); hp.connect(g); g.connect(c.destination); src.start(t + 0.1);
+      } catch (e) {}
+    }
+    function hitSound() {
+      $('table').classList.remove('hit');
+      void $('table').offsetWidth;
+      $('table').classList.add('hit');
+    }
+
+    try { $('name').value = localStorage.getItem('donkeyName') || ''; } catch (e) {}
+    const qp = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+    if (qp) {
+      $('code').value = qp;
+      toast(`Room ${qp} filled in — ${$('name').value ? 'tap Join room' : 'enter your name, then tap Join room'}`);
+      if (!$('name').value) $('name').focus();
+    }
+
+    let lostShown = -1;
+    function renderLost() {
+      const b = $('lostBox');
+      if (state.phase === 'finished' && state.donkey === me && lostShown !== state.gameNo) b.style.display = 'flex';
+      else if (state.phase !== 'finished') b.style.display = 'none';
+    }
+    $('lostClose').onclick = () => { lostShown = state.gameNo; $('lostBox').style.display = 'none'; };
+    socket.on('dealCard', () => { if (soundOn) flick(); });
   </script>
 </body>
 </html>

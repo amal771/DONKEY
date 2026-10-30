@@ -225,26 +225,42 @@
     /* Cards */
     .cards {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 14px 0;
-      min-height: 105px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 16px 8px 8px 8px;
+      margin: 8px 0;
+      min-height: 110px;
+      scrollbar-width: thin;
+      align-items: flex-end;
     }
     .card {
       width: 64px;
-      height: 90px;
+      height: 92px;
       background: #fffdf6;
       color: #15241d;
       border-radius: 9px;
       border: 2px solid #dedbd1;
-      box-shadow: 0 3px 7px #0005;
+      box-shadow: -2px 3px 7px #0006;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       padding: 6px;
       cursor: grab;
       user-select: none;
-      transition: transform .08s, box-shadow .15s;
+      transition: transform .12s cubic-bezier(0.2, 0.9, 0.3, 1), margin-right .12s ease, box-shadow .15s ease, z-index .1s ease;
+      flex: 0 0 auto;
+      position: relative;
+    }
+    /* Stacking / Fanning cards with negative margin so 20+ cards fit effortlessly */
+    .cards .card:not(:first-child) {
+      margin-left: -32px;
+    }
+    .cards .card:hover, .cards .card.selected {
+      z-index: 35 !important;
+      transform: translateY(-16px) scale(1.06);
+      margin-right: 14px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.6);
     }
     .card:active { cursor: grabbing; }
     .card.red { color: #bd263a; }
@@ -326,8 +342,10 @@
       .seat-badge{font-size:10px;padding:2px 6px;gap:4px}
       .card{width:42px;height:60px;padding:3px;border-radius:6px}
       .rank{font-size:12px}.suit{font-size:17px}
-      .cards{flex-wrap:nowrap;overflow-x:auto;min-height:0;margin:2px 0;padding-top:12px}
+      .cards{flex-wrap:nowrap;overflow-x:auto;min-height:0;margin:2px 0;padding:14px 4px 4px 4px;align-items:flex-end}
       .cards .card{flex:0 0 auto}
+      .cards .card:not(:first-child){margin-left:-25px}
+      .cards .card:hover, .cards .card.selected{transform:translateY(-12px) scale(1.05);margin-right:10px;z-index:40 !important}
       .panel:has(#hand) .hero,.panel:has(#hand)>.muted.small{display:none}
       .played-tag{font-size:9px}.high-card-pill{font-size:8px;top:-9px}
       .toggle-label{padding:3px 8px;font-size:11px}
@@ -336,6 +354,7 @@
   </style>
 </head>
 <body>
+  <div id="pausePromptBox" class="modal hidden"></div>
   <div id="golden"></div>
   <div id="exitBox" class="modal hidden"><p><strong>Leave this room and go back to the lobby?</strong></p><p class="muted small">If a match is running, your seat is played automatically and removed before the next deal.</p><button id="exitYes" class="btn-danger">Leave</button> <button id="exitNo" class="btn-secondary">Stay</button></div>
   <div id="scrollMsg"></div>
@@ -353,6 +372,7 @@
       </div>
       <div style="display: flex; gap: 8px; align-items: center;">
         <button id="fullscreenBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 13px;" onclick="toggleFullScreen()">⛶ Fullscreen</button>
+                <button id="fullscreenBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 13px;" onclick="toggleFullScreen()">⛶ Fullscreen</button>
         <div id="roomTag" class="tag hidden"></div>
       </div>
     </header>
@@ -396,6 +416,7 @@
           <button id="start">Deal & start</button>
           <button id="exitBtn" class="btn-secondary">Exit room</button>
           <button id="sound">Sound: on</button>
+          <button id="pauseBtn" class="btn-secondary hidden">Pause Game</button>
           <button id="callOff" class="btn-danger hidden">Call Off / New Game</button>
         </div>
       </div>
@@ -451,10 +472,7 @@
       <div class="panel qrpanel"><img id="qr" alt="Join QR" width="130" height="130"><div><div class="muted">Room code</div><div id="qrCode" class="bigcode"></div><div class="muted small">Scan to join. New players wait until the next match begins.</div><div id="waitList" class="small" style="margin-top:6px"></div></div></div>
       <div id="results" class="panel hidden"></div>
 
-      <!-- Host Controls -->
-      <div class="panel bottom" style="justify-content: flex-end;">
-        <button id="pauseBtn" class="btn-secondary hidden">Pause Game</button>
-      </div>
+
     </section>
 
     <footer class="muted small">Donkey Online • 50s/15s adaptive timer • Offline/inactive players are pruned before a new deal</footer>
@@ -485,7 +503,28 @@
       }
     }
 
-    const SUIT_ORDER = ['♠', '♥', '♦', '♣'];
+    // Alternating suit colors: Black (♠) -> Red (♥) -> Black (♣) -> Red (♦)
+    // Ensures same-color cards never sit together between suits!
+    const DEFAULT_ALTERNATING_SUITS = ['♠', '♥', '♣', '♦'];
+    const RED_SUITS = new Set(['♥', '♦']);
+
+    function getAlternatingSuitOrder(leadSuit) {
+      if (!leadSuit) return DEFAULT_ALTERNATING_SUITS;
+      const isLeadRed = RED_SUITS.has(leadSuit);
+      const sameColorOther = isLeadRed ? (leadSuit === '♥' ? '♦' : '♥') : (leadSuit === '♠' ? '♣' : '♠');
+      const [opp1, opp2] = isLeadRed ? ['♠', '♣'] : ['♥', '♦'];
+      // Alternating pattern: Lead (Color A) -> Opp1 (Color B) -> SameColor (Color A) -> Opp2 (Color B)
+      return [leadSuit, opp1, sameColorOther, opp2];
+    }
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
     const $ = id => document.getElementById(id);
     function err(t) { $('error').textContent = t || ''; }
     function name() { return $('name').value.trim().slice(0, 24); }
@@ -670,7 +709,7 @@
       renderTimer();
 
       const pauseBtn = $('pauseBtn');
-      if (state.hostId === me && state.phase === 'playing') {
+      if (state.phase === 'playing') {
         pauseBtn.classList.remove('hidden');
         pauseBtn.textContent = state.paused ? 'Resume Game' : 'Pause Game';
       } else {
@@ -834,6 +873,7 @@
           syncHandOrderToServer();
         };
 
+        card.style.zIndex = index + 1;
         handEl.appendChild(card);
       });
     }
@@ -861,10 +901,31 @@
       $('sound').textContent = 'Sound: ' + (soundOn ? 'on' : 'off');
     };
 
+    socket.on('pausePrompt', ({ byName, byId }) => {
+      if (byId === socket.id) return; // Requester does not need to approve their own request
+      const box = $('pausePromptBox');
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <p>⏸ <strong>${esc(byName)}</strong> requested to pause the game. Allow?</p>
+        <button id="pauseApproveBtn">Allow Pause</button>
+        <button id="pauseDeclineBtn" class="btn-secondary">Decline</button>
+      `;
+      $('pauseApproveBtn').onclick = () => {
+        socket.emit('respondPause', { approve: true });
+        box.classList.add('hidden');
+      };
+      $('pauseDeclineBtn').onclick = () => {
+        socket.emit('respondPause', { approve: false });
+        box.classList.add('hidden');
+      };
+    });
+
+    socket.on('pausePromptDismiss', () => {
+      $('pausePromptBox').classList.add('hidden');
+    });
+
     $('pauseBtn').onclick = () => {
-      if (confirm('Are you sure you want to pause/resume the game?')) {
-        socket.emit('togglePause');
-      }
+      socket.emit('togglePause');
     };
 
     $('callOff').onclick = () => {

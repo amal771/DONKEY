@@ -31,10 +31,9 @@
       cursor: pointer;
       background: var(--gold);
       color: #17221e;
-      transition: filter 0.15s ease, transform 0.08s ease;
+      transition: filter 0.15s ease;
     }
     button:hover:not(:disabled) { filter: brightness(1.1); }
-    button:active:not(:disabled) { transform: scale(0.97); }
     button:disabled { opacity: .45; cursor: not-allowed; }
     .btn-danger { background: var(--red); color: white; }
     .btn-secondary { background: #285347; color: white; }
@@ -48,72 +47,6 @@
     .field input, .field select { background: #071e19; color: white; border: 1px solid #42665a; border-radius: 9px; padding: 11px; }
     .muted { color: #a9c2b6; font-size: 13px; }
     .hidden { display: none !important; }
-
-    /* Top Right Global Actions (Menu & Fullscreen) */
-    .top-right-bar {
-      position: fixed;
-      top: 12px;
-      right: 14px;
-      z-index: 1000;
-      display: flex;
-      gap: 6px;
-      align-items: center;
-    }
-    .top-action-btn {
-      background: #1b473c;
-      color: #fff;
-      border: 1px solid #3c7767;
-      border-radius: 8px;
-      padding: 6px 12px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      transition: filter .15s ease;
-    }
-    .top-action-btn:hover { filter: brightness(1.2); }
-    @media (max-width: 700px), (max-height: 540px) {
-      .top-right-bar {
-        top: 6px;
-        right: 8px;
-        gap: 4px;
-      }
-      .top-action-btn {
-        padding: 5px 8px;
-        font-size: 11px;
-      }
-    }
-
-    /* Modal Menu for Non-In-Game Buttons */
-    .menu-modal-content {
-      background: #0d2a22;
-      border: 2px solid var(--gold);
-      border-radius: 16px;
-      padding: 20px;
-      max-width: 380px;
-      width: 90vw;
-      text-align: center;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.8);
-      position: relative;
-    }
-    .menu-btn-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin: 16px 0;
-    }
-    .menu-btn-list button {
-      width: 100%;
-      padding: 12px;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
 
     /* Center Timer Bar */
     .timer-bar {
@@ -289,7 +222,7 @@
       z-index: 2;
     }
 
-    /* Cards - Stacking / Fanning so more cards fit on screen */
+    /* Cards */
     .cards {
       display: flex;
       flex-wrap: nowrap;
@@ -319,10 +252,11 @@
       flex: 0 0 auto;
       position: relative;
     }
+    /* Stacking / Fanning cards with negative margin so 20+ cards fit effortlessly */
     .cards .card:not(:first-child) {
       margin-left: -32px;
     }
-    .card:hover, .card.selected {
+    .cards .card:hover, .cards .card.selected {
       z-index: 35 !important;
       transform: translateY(-16px) scale(1.06);
       margin-right: 14px;
@@ -331,6 +265,7 @@
     .card:active { cursor: grabbing; }
     .card.red { color: #bd263a; }
     .card.selected {
+      transform: translateY(-12px);
       border: 3px solid var(--gold);
       box-shadow: 0 0 0 3px #f6e5a0;
     }
@@ -349,7 +284,7 @@
     .bottom { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .status { font-size: 14px; color: #f7e7ac; min-height: 22px; }
     .tag { border: 1px solid #547e6e; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #cde0d5; }
-    .modal { background: #000000bd; border: 0; padding: 14px; }
+    .modal { background: #0b241d; border: 1px solid #b9a25c; border-radius: 14px; padding: 14px; margin-top: 12px; }
     .small { font-size: 12px; }
     .warn { color: #ffb7a9; margin-top: 6px; }
     
@@ -380,6 +315,8 @@
     .popup{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:50;background:#0b241d;border:2px solid var(--gold);border-radius:14px;padding:12px 18px;box-shadow:0 8px 30px #000a;text-align:center;max-width:92vw}
     .popup .cards{justify-content:center;margin:8px 0 0}
     .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#7a2b22;color:#fff;padding:10px 16px;border-radius:10px;z-index:60}
+    .qrpanel{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+    .qrpanel img{background:#fff;border-radius:8px;padding:4px}
     .bigcode{font-size:34px;font-weight:900;letter-spacing:.2em;color:var(--gold)}
     #highBanner{font-size:14px}
   
@@ -388,13 +325,13 @@
     #golden{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:80;pointer-events:none;text-align:center;padding:20px;
       font-size:clamp(24px,7vw,64px);font-weight:900;color:#ffd700;text-shadow:0 0 14px #b8860b,0 3px 6px #000;animation:gpop .4s ease-out}
     @keyframes gpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
-    #requestBox,#surrenderBox,#timeGrantBox,#offerBox,#exitBox,#pausePromptBox,#gameMenuModal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;width:min(420px,92vw);box-shadow:0 10px 40px #000c;text-align:center}
+    #requestBox,#surrenderBox,#timeGrantBox,#offerBox,#exitBox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;width:min(420px,92vw);box-shadow:0 10px 40px #000c;text-align:center}
     .cards .card{touch-action:pan-x}
-    
+    /* Phones, portrait or landscape: table (dealt cards) and hand always share one screen */
     @media (max-width:700px),(max-height:540px){
       body.inplay{overflow:hidden}
       body.inplay .app{height:100dvh;display:flex;flex-direction:column;padding:4px 6px;max-width:none}
-      body.inplay header.hero,body.inplay footer,body.inplay #results{display:none}
+      body.inplay header.hero,body.inplay footer,body.inplay .qrpanel,body.inplay #results{display:none}
       body.inplay #board{flex:1;min-height:0;display:flex;flex-direction:column}
       body.inplay #board>.panel{margin:3px 0;padding:5px 8px;border-radius:10px;flex:none}
       body.inplay .table-container{flex:1;min-height:0;height:auto;padding:34px 6px;margin:0 0 3px;border-radius:18px}
@@ -417,48 +354,9 @@
   </style>
 </head>
 <body>
-  <!-- FIXED TOP RIGHT GLOBAL ACTION BAR (MENU + ONLY ONE FULLSCREEN BUTTON) -->
-  <div class="top-right-bar">
-    <button id="menuOpenBtn" class="top-action-btn" title="Open Game Menu">☰ Menu</button>
-    <button id="fullscreenBtn" class="top-action-btn" onclick="toggleFullScreen()" title="Toggle Fullscreen">⛶ Fullscreen</button>
-  </div>
-
   <div id="pausePromptBox" class="modal hidden"></div>
   <div id="golden"></div>
-
-  <!-- NON-IN-GAME BUTTONS MODAL MENU -->
-  <div id="gameMenuModal" class="modal hidden">
-    <div class="menu-modal-content">
-      <h3 style="margin-top:0; color:var(--gold);">⚙️ Game Menu</h3>
-      <div id="menuRoomInfo" style="font-size:13px; color:#d4e2da; margin-bottom:8px;"></div>
-      <div class="menu-btn-list">
-        <button id="menuSoundBtn" class="btn-secondary">🔊 Sound: on</button>
-        <button id="menuQrBtn" class="btn-secondary">📱 Show Room QR Code</button>
-        <button id="menuCallOffBtn" class="btn-danger hidden">🗳️ Call Off / New Game</button>
-        <button id="menuExitBtn" class="btn-danger">🚪 Exit Room to Lobby</button>
-      </div>
-      <button id="menuCloseBtn" class="btn-secondary" style="width:100%;">Close Menu</button>
-    </div>
-  </div>
-
-  <!-- QR DISPLAY MODAL -->
-  <div id="qrModal" class="modal hidden" style="position:fixed;inset:0;background:#000b;align-items:center;justify-content:center;z-index:90;">
-    <div style="background:#0e2e25;border:2px solid var(--gold);border-radius:16px;padding:20px;text-align:center;max-width:320px;margin:auto;">
-      <h3 style="margin-top:0;color:var(--gold);">Room QR Code</h3>
-      <div id="qrModalCode" class="bigcode" style="margin-bottom:10px;"></div>
-      <img id="qrModalImg" alt="QR" width="160" height="160" style="background:#fff;border-radius:8px;padding:4px;">
-      <p class="muted small" style="margin:10px 0 14px;">Scan with another phone to join immediately.</p>
-      <button id="qrModalClose" class="btn-secondary" style="width:100%;">Close</button>
-    </div>
-  </div>
-
-  <div id="exitBox" class="modal hidden">
-    <p><strong>Leave this room and go back to the lobby?</strong></p>
-    <p class="muted small">If a match is running, your seat is played automatically and removed before the next deal.</p>
-    <button id="exitYes" class="btn-danger">Leave</button>
-    <button id="exitNo" class="btn-secondary">Stay</button>
-  </div>
-  
+  <div id="exitBox" class="modal hidden"><p><strong>Leave this room and go back to the lobby?</strong></p><p class="muted small">If a match is running, your seat is played automatically and removed before the next deal.</p><button id="exitYes" class="btn-danger">Leave</button> <button id="exitNo" class="btn-secondary">Stay</button></div>
   <div id="scrollMsg"></div>
   <div id="lostBox" style="display:none;position:fixed;inset:0;z-index:95;background:#000d;align-items:center;justify-content:center;flex-direction:column;gap:18px;text-align:center;color:#fff">
     <div style="font-size:72px">🫏</div>
@@ -466,14 +364,15 @@
     <div class="muted">You were the last player holding cards.</div>
     <button id="lostClose">OK</button>
   </div>
-
-  <div class="app">
+    <div class="app">
     <header class="hero">
       <div>
         <div class="brand">♠ DONKEY <span>ONLINE</span></div>
         <div class="muted">Multiplayer card table</div>
       </div>
-      <div style="display: flex; gap: 8px; align-items: center; margin-right: 170px;">
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button id="fullscreenBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 13px;" onclick="toggleFullScreen()">⛶ Fullscreen</button>
+                <button id="fullscreenBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 13px;" onclick="toggleFullScreen()">⛶ Fullscreen</button>
         <div id="roomTag" class="tag hidden"></div>
       </div>
     </header>
@@ -508,7 +407,6 @@
     </section>
 
     <section id="board" class="hidden">
-      <!-- In-Game Status & Play Action Bar -->
       <div class="panel hero">
         <div>
           <div class="tag" id="phaseTag">Lobby</div>
@@ -516,7 +414,10 @@
         </div>
         <div class="bottom">
           <button id="start">Deal & start</button>
+          <button id="exitBtn" class="btn-secondary">Exit room</button>
+          <button id="sound">Sound: on</button>
           <button id="pauseBtn" class="btn-secondary hidden">Pause Game</button>
+          <button id="callOff" class="btn-danger hidden">Call Off / New Game</button>
         </div>
       </div>
 
@@ -549,9 +450,6 @@
           <button id="play">Deal selected card</button>
           <button id="clear">Clear</button>
 
-          <!-- Manual Instant Sort Button -->
-          <button id="manualSortBtn" class="btn-secondary" title="Sort hand into alternating suit colors">Sort Hand</button>
-
           <!-- Auto-Sort Toggle -->
           <label class="toggle-label">
             <input type="checkbox" id="autoSortToggle">
@@ -565,19 +463,23 @@
             <button id="request" class="btn-secondary">Request all cards from next player</button>
           </div>
         </div>
-        <div class="muted small" style="margin-top: 8px;">Cards are stacked to fit hand. Drag to reorder, drag onto table, double-tap, or select and press Deal.</div>
+        <div class="muted small" style="margin-top: 8px;">Drag cards to reorder, or drag one onto the table / double-tap it / select it and press Deal.</div>
         <div id="surrenderBox" class="modal hidden"></div>
         <div id="requestBox" class="modal hidden"></div>
         <div id="timeGrantBox" class="modal hidden"></div>
       </div>
 
+      <div class="panel qrpanel"><img id="qr" alt="Join QR" width="130" height="130"><div><div class="muted">Room code</div><div id="qrCode" class="bigcode"></div><div class="muted small">Scan to join. New players wait until the next match begins.</div><div id="waitList" class="small" style="margin-top:6px"></div></div></div>
       <div id="results" class="panel hidden"></div>
+
+
     </section>
 
     <footer class="muted small">Donkey Online • 50s/15s adaptive timer • Offline/inactive players are pruned before a new deal</footer>
   </div>
 
   <script>
+    // Initialize Socket.io client
     const socket = typeof io !== 'undefined' ? io() : null;
     if (!socket) {
       alert("Socket.io failed to load. Please check your internet connection.");
@@ -593,12 +495,6 @@
     let localHand = [];
     let draggedCardId = null;
 
-    // Load saved auto-sort preference
-    try {
-      autoSort = localStorage.getItem('donkeyAutoSort') === '1';
-    } catch(e) {}
-
-    // ONLY ONE FULLSCREEN FUNCTION DEFINITION
     function toggleFullScreen() {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(err => console.log(err));
@@ -608,7 +504,7 @@
     }
 
     // Alternating suit colors: Black (♠) -> Red (♥) -> Black (♣) -> Red (♦)
-    // Ensures cards of the same color never sit together between suits!
+    // Ensures same-color cards never sit together between suits!
     const DEFAULT_ALTERNATING_SUITS = ['♠', '♥', '♣', '♦'];
     const RED_SUITS = new Set(['♥', '♦']);
 
@@ -617,98 +513,22 @@
       const isLeadRed = RED_SUITS.has(leadSuit);
       const sameColorOther = isLeadRed ? (leadSuit === '♥' ? '♦' : '♥') : (leadSuit === '♠' ? '♣' : '♠');
       const [opp1, opp2] = isLeadRed ? ['♠', '♣'] : ['♥', '♦'];
-      // Pattern: Lead (Color 1) -> Opp1 (Color 2) -> SameColor (Color 1) -> Opp2 (Color 2)
+      // Alternating pattern: Lead (Color A) -> Opp1 (Color B) -> SameColor (Color A) -> Opp2 (Color B)
       return [leadSuit, opp1, sameColorOther, opp2];
     }
 
-    const currentLead = () => (state && state.table && state.table.length ? state.leadSuit : null);
-
-    // FIXED AUTO-SORT: uses getAlternatingSuitOrder, works reliably without ReferenceError
-    function sortLocalHand(lead = currentLead()) {
-      const activeSuitOrder = getAlternatingSuitOrder(lead);
-      localHand.sort((a, b) => {
-        let suitDiff = activeSuitOrder.indexOf(a.suit) - activeSuitOrder.indexOf(b.suit);
-        if (suitDiff !== 0) return suitDiff;
-        return (b.value - a.value) || (b.pack - a.pack);
-      });
-    }
-
-    function syncHandOrderToServer() {
-      if (socket) socket.emit('reorderHand', { cardIds: localHand.map(c => c.id) });
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
     }
 
     const $ = id => document.getElementById(id);
     function err(t) { $('error').textContent = t || ''; }
     function name() { return $('name').value.trim().slice(0, 24); }
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-
-    // NON-IN-GAME MENU CONTROLS
-    $('menuOpenBtn').onclick = () => {
-      const modal = $('gameMenuModal');
-      modal.classList.remove('hidden');
-      if (state && state.code) {
-        $('menuRoomInfo').innerHTML = `Room: <strong>${esc(state.code)}</strong> • Phase: <strong>${esc(state.phase.toUpperCase())}</strong>`;
-        $('menuCallOffBtn').classList.toggle('hidden', !(state.canVote && state.phase === 'playing'));
-      } else {
-        $('menuRoomInfo').textContent = 'Lobby';
-        $('menuCallOffBtn').classList.add('hidden');
-      }
-    };
-    $('menuCloseBtn').onclick = () => $('gameMenuModal').classList.add('hidden');
-
-    $('menuSoundBtn').onclick = () => {
-      soundOn = !soundOn;
-      $('menuSoundBtn').textContent = '🔊 Sound: ' + (soundOn ? 'on' : 'off');
-      toast('Sound ' + (soundOn ? 'enabled' : 'muted'));
-    };
-
-    $('menuExitBtn').onclick = () => {
-      $('gameMenuModal').classList.add('hidden');
-      $('exitBox').classList.remove('hidden');
-    };
-
-    $('menuCallOffBtn').onclick = () => {
-      $('gameMenuModal').classList.add('hidden');
-      if (confirm('Vote to call off the current game?')) {
-        socket.emit('voteCallOff');
-      }
-    };
-
-    $('menuQrBtn').onclick = () => {
-      $('gameMenuModal').classList.add('hidden');
-      if (state && state.code) {
-        $('qrModalCode').textContent = state.code;
-        $('qrModalImg').src = '/qr/' + state.code;
-        $('qrModal').style.display = 'flex';
-        $('qrModal').classList.remove('hidden');
-      } else {
-        toast('Join or create a room to view QR code');
-      }
-    };
-    $('qrModalClose').onclick = () => {
-      $('qrModal').style.display = 'none';
-      $('qrModal').classList.add('hidden');
-    };
-
-    // MANUAL SORT BUTTON
-    $('manualSortBtn').onclick = () => {
-      sortLocalHand();
-      renderHand();
-      syncHandOrderToServer();
-      toast('Hand sorted into alternating colors');
-    };
-
-    $('autoSortToggle').checked = autoSort;
-    $('autoSortToggle').addEventListener('change', (e) => {
-      autoSort = e.target.checked;
-      try { localStorage.setItem('donkeyAutoSort', autoSort ? '1' : '0'); } catch(err) {}
-      if (autoSort) {
-        sortLocalHand();
-        syncHandOrderToServer();
-      }
-      renderHand();
-      toast('Auto-sort ' + (autoSort ? 'enabled' : 'disabled'));
-    });
 
     $('create').onclick = () => {
       err('');
@@ -768,6 +588,10 @@
     }
     function renderExtras() {
       const mine = state.players.find(p => p.id === me);
+      if ($('qr').dataset.code !== state.code) { $('qr').src = '/qr/' + state.code; $('qr').dataset.code = state.code; }
+      $('qrCode').textContent = state.code;
+      const w = state.players.filter(p => p.wait);
+      $('waitList').innerHTML = w.length ? '<b>Waiting for next match:</b> ' + w.map(p => esc(p.name)).join(', ') : '';
       const rs = $('results');
       if (state.phase === 'finished') {
         const dk = state.players.find(p => p.id === state.donkey);
@@ -788,6 +612,29 @@
       } else box.classList.add('hidden');
     }
     $('surrenderBtn').onclick = () => { if (confirm('Offer to surrender? If approved you become the Donkey.')) socket.emit('surrender'); };
+
+    $('autoSortToggle').addEventListener('change', (e) => {
+      autoSort = e.target.checked;
+      if (autoSort) {
+        sortLocalHand();
+        syncHandOrderToServer();
+      }
+      renderHand();
+    });
+
+    const currentLead = () => (state && state.table && state.table.length ? state.leadSuit : null);
+    function sortLocalHand(lead = currentLead()) {
+      localHand.sort((a, b) => {
+        if (lead) { const lf = (b.suit === lead) - (a.suit === lead); if (lf !== 0) return lf; }
+        let suitDiff = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
+        if (suitDiff !== 0) return suitDiff;
+        return (b.value - a.value) || (b.pack - a.pack);
+      });
+    }
+
+    function syncHandOrderToServer() {
+      if (socket) socket.emit('reorderHand', { cardIds: localHand.map(c => c.id) });
+    }
 
     socket.on('starterAlert', () => {
       beep(660, 0.15);
@@ -812,32 +659,7 @@
         <button id="approveTimeBtn">Allow 30s</button>
         <button id="dismissTimeBtn" class="btn-secondary">Dismiss</button>
       `;
-      $('approveTimeBtn').onclick = () => { socket.emit('grantTime'); box.classList.add('hidden'); };
-      $('dismissTimeBtn').onclick = () => box.classList.add('hidden');
-    });
-
-    // PAUSE VOTE PROMPT
-    socket.on('pausePrompt', ({ byName, byId }) => {
-      if (byId === socket.id) return;
-      const box = $('pausePromptBox');
-      box.classList.remove('hidden');
-      box.innerHTML = `
-        <p>⏸ <strong>${esc(byName)}</strong> requested to pause the game. Allow?</p>
-        <button id="pauseApproveBtn">Allow Pause</button>
-        <button id="pauseDeclineBtn" class="btn-secondary">Decline</button>
-      `;
-      $('pauseApproveBtn').onclick = () => {
-        socket.emit('respondPause', { approve: true });
-        box.classList.add('hidden');
-      };
-      $('pauseDeclineBtn').onclick = () => {
-        socket.emit('respondPause', { approve: false });
-        box.classList.add('hidden');
-      };
-    });
-
-    socket.on('pausePromptDismiss', () => {
-      $('pausePromptBox').classList.add('hidden');
+      $('approveTimeBtn').onclick = () => { socket.emit('grantTime'); box.classList.add('hidden'); };$('dismissTimeBtn').onclick = () => box.classList.add('hidden');
     });
 
     socket.on('state', s => {
@@ -867,10 +689,7 @@
       for (const newCard of serverMap.values()) updated.push(newCard);
       localHand = updated;
 
-      // Ensure auto-sort triggers smoothly with alternating suits on state changes
-      if (autoSort) {
-        sortLocalHand(s.table && s.table.length ? s.leadSuit : null);
-      }
+      if (autoSort) sortLocalHand(s.table && s.table.length ? s.leadSuit : null);
       render();
     });
 
@@ -885,19 +704,24 @@
       if (!state) return;
       $('phaseTag').textContent = (state.paused ? 'PAUSED • ' : '') + state.phase.toUpperCase() + ' • ' + (state.deckSize || 52) + ' CARDS';
       $('status').textContent = state.notice || '';
-      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing' || state.phase === 'dealing';
-      $('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
+      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing' || state.phase === 'dealing';$('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
 
       renderTimer();
 
-      // PAUSE BUTTON FOR ALL ACTIVE PLAYERS
       const pauseBtn = $('pauseBtn');
       if (state.phase === 'playing') {
         pauseBtn.classList.remove('hidden');
-        pauseBtn.textContent = state.paused ? '▶ Resume Game' : '⏸ Pause Game';
+        pauseBtn.textContent = state.paused ? 'Resume Game' : 'Pause Game';
       } else {
         pauseBtn.classList.add('hidden');
       }
+
+      const callOffBtn = $('callOff');
+      const mineP = state.players.find(p => p.id === me);
+      if (state.canVote && mineP && !mineP.wait) {
+        callOffBtn.classList.remove('hidden');
+        callOffBtn.textContent = `Request new game (${state.callOffVotes.length}/${state.voteNeed})`;
+      } else callOffBtn.classList.add('hidden');
 
       document.body.classList.toggle('inplay', state.phase === 'playing' || state.phase === 'dealing');
       renderLost();
@@ -1005,9 +829,10 @@
         const card = document.createElement('div');
         card.className = `card ${isRed ? 'red ' : ''}${isSel ? 'selected' : ''}`;
         card.draggable = true;
-        card.style.zIndex = index + 1;
 
-        card.innerHTML = `${face(c)}`;
+        card.innerHTML = `
+          ${face(c)}
+        `;
 
         card.onclick = () => {
           const now = Date.now();
@@ -1040,7 +865,6 @@
 
           autoSort = false;
           $('autoSortToggle').checked = false;
-          try { localStorage.setItem('donkeyAutoSort', '0'); } catch(err) {}
 
           const [movedCard] = localHand.splice(fromIdx, 1);
           localHand.splice(toIdx, 0, movedCard);
@@ -1049,6 +873,7 @@
           syncHandOrderToServer();
         };
 
+        card.style.zIndex = index + 1;
         handEl.appendChild(card);
       });
     }
@@ -1071,9 +896,42 @@
     };
     $('clear').onclick = () => { selected.clear(); render(); };
     $('request').onclick = () => socket.emit('requestCards', {});
+    $('sound').onclick = () => {
+      soundOn = !soundOn;
+      $('sound').textContent = 'Sound: ' + (soundOn ? 'on' : 'off');
+    };
+
+    socket.on('pausePrompt', ({ byName, byId }) => {
+      if (byId === socket.id) return; // Requester does not need to approve their own request
+      const box = $('pausePromptBox');
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <p>⏸ <strong>${esc(byName)}</strong> requested to pause the game. Allow?</p>
+        <button id="pauseApproveBtn">Allow Pause</button>
+        <button id="pauseDeclineBtn" class="btn-secondary">Decline</button>
+      `;
+      $('pauseApproveBtn').onclick = () => {
+        socket.emit('respondPause', { approve: true });
+        box.classList.add('hidden');
+      };
+      $('pauseDeclineBtn').onclick = () => {
+        socket.emit('respondPause', { approve: false });
+        box.classList.add('hidden');
+      };
+    });
+
+    socket.on('pausePromptDismiss', () => {
+      $('pausePromptBox').classList.add('hidden');
+    });
 
     $('pauseBtn').onclick = () => {
       socket.emit('togglePause');
+    };
+
+    $('callOff').onclick = () => {
+      if (confirm('Vote to call off the current game?')) {
+        socket.emit('voteCallOff');
+      }
     };
 
     function beep(freq, duration) {
@@ -1150,6 +1008,7 @@
       clearTimeout(g._t); g._t = setTimeout(() => g.style.display = 'none', (x.secs || 3) * 1000);
     });
     socket.on('left', () => { location.href = location.pathname; });
+    $('exitBtn').onclick = () => $('exitBox').classList.remove('hidden');
     $('exitNo').onclick = () => $('exitBox').classList.add('hidden');
     $('exitYes').onclick = () => { socket.emit('leave'); setTimeout(() => { location.href = location.pathname; }, 400); };
 

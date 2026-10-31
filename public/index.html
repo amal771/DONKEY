@@ -4,577 +4,433 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Donkey — Online Cards</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
-      --felt: #0b503f;
-      --felt2: #07392f;
-      --gold: #e5c77a;
-      --neon-green: #39ff14;
-      --ink: #17221e;
-      --red: #e74c3c;
+      --felt: #0b503f; --felt2: #07392f; --gold: #e5c77a; --neon-green: #39ff14; --ink: #17221e; --red: #e74c3c;
+      /* Hand card size. Table-pile cards are drawn at 90% of this. */
+      --hcw: 92px; --hch: 132px;
+      --cw: var(--hcw); --ch: var(--hch);
     }
+    @media (max-width: 700px) { :root { --hcw: 68px; --hch: 98px; } }
+    @media (max-height: 540px) { :root { --hcw: 58px; --hch: 84px; } }
+
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
-      background: #071e19;
-      color: #f4f3e8;
-    }
+    html, body { height: 100%; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: #071e19; color: #f4f3e8; -webkit-tap-highlight-color: transparent; }
     button, input, select { font: inherit; }
-    button {
-      border: 0;
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-weight: 700;
-      cursor: pointer;
-      background: var(--gold);
-      color: #17221e;
-      transition: filter 0.15s ease;
-    }
+    button { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; background: var(--gold); color: #17221e; transition: filter .15s ease; }
     button:hover:not(:disabled) { filter: brightness(1.1); }
     button:disabled { opacity: .45; cursor: not-allowed; }
-    .btn-danger { background: var(--red); color: white; }
-    .btn-secondary { background: #285347; color: white; }
-    .app { max-width: 1200px; margin: auto; padding: 20px; }
-    .hero { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .brand { font-size: 28px; font-weight: 900; letter-spacing: .04em; }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-secondary { background: #285347; color: #fff; }
+    .hidden { display: none !important; }
+    .muted { color: #a9c2b6; font-size: 13px; }
+    .small { font-size: 12px; }
+    .warn { color: #ffb7a9; margin-top: 6px; }
+    .tag { border: 1px solid #547e6e; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #cde0d5; white-space: nowrap; }
+
+    .app { max-width: 1200px; margin: auto; padding: 10px 20px 20px; }
+    .brand { font-size: 28px; font-weight: 900; letter-spacing: .04em; margin: 10px 0 2px; }
     .brand span { color: var(--gold); }
     .panel { background: #102e26; border: 1px solid #285347; border-radius: 16px; padding: 16px; margin: 14px 0; }
     .setup { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
     .field { display: flex; flex-direction: column; gap: 6px; color: #d4e2da; font-size: 13px; }
-    .field input, .field select { background: #071e19; color: white; border: 1px solid #42665a; border-radius: 9px; padding: 11px; }
-    .muted { color: #a9c2b6; font-size: 13px; }
-    .hidden { display: none !important; }
+    .field input, .field select { background: #071e19; color: #fff; border: 1px solid #42665a; border-radius: 9px; padding: 11px; }
 
-    /* Center Timer Bar */
-    .timer-bar {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      font-size: 16px;
-      font-weight: 800;
-      letter-spacing: .03em;
-      background: #09261f;
-      border: 1px solid #2a6152;
-      border-radius: 12px;
-      padding: 8px 16px;
-      margin-bottom: 12px;
-      color: #f7e7ac;
-    }
-    .timer-bar.urgent {
-      color: #ff5252;
-      border-color: #ff5252;
-      animation: pulseUrgent .8s infinite alternate;
-    }
-    @keyframes pulseUrgent {
-      from { transform: scale(1); }
-      to { transform: scale(1.02); }
-    }
+    /* ───────── Top bar: always visible (menu + fullscreen + live game info) ───────── */
+    #topbar { display: flex; align-items: center; gap: 8px; min-height: 40px; flex: none; }
+    .iconbtn { width: 40px; height: 40px; padding: 0; font-size: 20px; line-height: 1; border-radius: 12px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+    .burger { display: inline-flex; flex-direction: column; gap: 4px; }
+    .burger i { display: block; width: 18px; height: 2.5px; background: #fff; border-radius: 2px; }
+    #status { flex: 1 1 auto; min-width: 0; font-size: 13px; color: #f7e7ac; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .timer-bar { display: flex; align-items: center; gap: 6px; flex: none; font-size: 14px; font-weight: 800; background: #09261f; border: 1px solid #2a6152; border-radius: 12px; padding: 6px 12px; color: #f7e7ac; max-width: 46%; }
+    .timer-bar.urgent { color: #ff5252; border-color: #ff5252; animation: pulseUrgent .8s infinite alternate; }
+    @keyframes pulseUrgent { from { transform: scale(1); } to { transform: scale(1.04); } }
 
-    /* Table Seating & Neon Flash Animation */
+    /* ───────── Board takes the whole screen once in a room ───────── */
+    body.inboard { overflow: hidden; }
+    body.inboard .app { height: 100dvh; max-width: 1400px; display: flex; flex-direction: column; padding: 6px 10px; }
+    body.inboard #board { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+
+    /* ───────── Table ───────── */
     .table-container {
-      position: relative;
-      background: #08261f;
-      border: 3px solid #1c5243;
-      border-radius: 28px;
-      padding: 65px 20px;
-      margin-bottom: 14px;
-      min-height: 460px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      transition: border-color .3s, box-shadow .3s;
+      position: relative; flex: 1; min-height: 0; background: #08261f; border: 3px solid #1c5243; border-radius: 28px;
+      padding: 44px 16px; display: flex; align-items: center; justify-content: center; overflow: hidden; transition: border-color .3s, box-shadow .3s;
     }
-
-    /* Fluorescent Green Flash 3 Times */
-    .table-container.turn-flash-thrice {
-      animation: flashNeonGreen 1.8s ease-in-out;
-    }
+    .table-container.turn-flash-thrice { animation: flashNeonGreen 1.8s ease-in-out; }
     @keyframes flashNeonGreen {
-      0%, 100% {
-        border-color: #1c5243;
-        box-shadow: none;
-      }
-      16%, 50%, 84% {
-        border-color: var(--neon-green);
-        box-shadow: 0 0 35px var(--neon-green), inset 0 0 25px rgba(57, 255, 20, 0.4);
-      }
-      33%, 67% {
-        border-color: #1c5243;
-        box-shadow: none;
-      }
+      0%, 100% { border-color: #1c5243; box-shadow: none; }
+      16%, 50%, 84% { border-color: var(--neon-green); box-shadow: 0 0 35px var(--neon-green), inset 0 0 25px rgba(57,255,20,.4); }
+      33%, 67% { border-color: #1c5243; box-shadow: none; }
     }
+    .seats-ring { position: absolute; inset: 0; pointer-events: none; }
+    .player-seat { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; z-index: 10; pointer-events: auto; }
+    .seat-badge { display: flex; align-items: center; gap: 6px; background: #0f2e26; border: 2px solid #285347; border-radius: 20px; padding: 4px 10px; box-shadow: 0 4px 10px rgba(0,0,0,.4); font-size: 12px; font-weight: 600; }
+    .seat-badge.active-turn { border-color: var(--neon-green); box-shadow: 0 0 14px var(--neon-green); background: #123d32; }
+    .player-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; flex: none; }
+    .kick-btn { background: none; border: none; color: #ff8080; cursor: pointer; padding: 0 3px; font-size: 13px; font-weight: bold; }
+    .seat-cards-badge { background: #1e453b; color: var(--gold); border-radius: 12px; padding: 1px 7px; font-size: 11px; font-weight: bold; }
+    .seat-timer-badge { background: #0a1f19; color: var(--neon-green); border: 1px solid var(--neon-green); border-radius: 10px; padding: 1px 6px; font-size: 10px; font-weight: bold; }
 
-    .seats-ring {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-    }
-    .player-seat {
-      position: absolute;
-      transform: translate(-50%, -50%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      z-index: 10;
-      pointer-events: auto;
-    }
-    .seat-badge {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: #0f2e26;
-      border: 2px solid #285347;
-      border-radius: 20px;
-      padding: 4px 10px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .seat-badge.active-turn {
-      border-color: var(--neon-green);
-      box-shadow: 0 0 14px var(--neon-green);
-      background: #123d32;
-    }
-    .player-dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      border: 2px solid #fff;
-    }
-    .kick-btn {
-      background: none;
-      border: none;
-      color: #ff8080;
-      cursor: pointer;
-      padding: 0 3px;
-      font-size: 13px;
-      font-weight: bold;
-    }
-    .kick-btn:hover { color: #ff3333; }
-    .seat-cards-badge {
-      background: #1e453b;
-      color: var(--gold);
-      border-radius: 12px;
-      padding: 1px 7px;
-      font-size: 11px;
-      font-weight: bold;
-    }
-    .seat-timer-badge {
-      background: #0a1f19;
-      color: var(--neon-green);
-      border: 1px solid var(--neon-green);
-      border-radius: 10px;
-      padding: 1px 6px;
-      font-size: 10px;
-      font-weight: bold;
-    }
-
-    /* Table Felt & Center Trick */
     .table-felt {
-      width: 68%;
-      min-height: 230px;
-      border-radius: 30px;
-      background: radial-gradient(ellipse at center, var(--felt), var(--felt2));
-      border: 3px solid #1f6954;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 12px;
-      padding: 20px;
-      box-shadow: inset 0 0 35px #000a;
-      z-index: 5;
+      width: 68%; max-height: 100%; border-radius: 30px; background: radial-gradient(ellipse at center, var(--felt), var(--felt2)); border: 3px solid #1f6954;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 10px;
+      box-shadow: inset 0 0 35px #000a; z-index: 5; overflow-x: hidden; overflow-y: auto;
     }
-    .played {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      position: relative;
-    }
-    .played-tag {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      background: #09201a;
-      padding: 2px 7px;
-      border-radius: 10px;
-      font-size: 11px;
-    }
-    .high-card-pill {
-      position: absolute;
-      top: -12px;
-      background: linear-gradient(135deg, #ffd700, #ff9800);
-      color: #17221e;
-      font-size: 10px;
-      font-weight: 900;
-      padding: 2px 7px;
-      border-radius: 999px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-      letter-spacing: .05em;
-      z-index: 2;
-    }
+    #highBanner { font-size: 13px; padding: 3px 12px; margin: 0; max-width: 100%; }
+    #preGame { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    #results { text-align: left; font-size: 14px; line-height: 1.6; }
+    #results h3 { margin: 0 0 4px; }
 
-    /* Cards */
-    .cards {
-      display: flex;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding: 16px 8px 8px 8px;
-      margin: 8px 0;
-      min-height: 110px;
-      scrollbar-width: thin;
-      align-items: flex-end;
-    }
+    /* ───────── Card faces ───────── */
     .card {
-      width: 64px;
-      height: 92px;
-      background: #fffdf6;
-      color: #15241d;
-      border-radius: 9px;
-      border: 2px solid #dedbd1;
-      box-shadow: -2px 3px 7px #0006;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 6px;
-      cursor: grab;
-      user-select: none;
-      transition: transform .12s cubic-bezier(0.2, 0.9, 0.3, 1), margin-right .12s ease, box-shadow .15s ease, z-index .1s ease;
-      flex: 0 0 auto;
-      position: relative;
-    }
-    /* Stacking / Fanning cards with negative margin so 20+ cards fit effortlessly */
-    .cards .card:not(:first-child) {
-      margin-left: -32px;
-    }
-    .cards .card:hover, .cards .card.selected {
-      z-index: 35 !important;
-      transform: translateY(-16px) scale(1.06);
-      margin-right: 14px;
-      box-shadow: 0 8px 18px rgba(0,0,0,0.6);
+      width: var(--cw); height: var(--ch); flex: 0 0 auto; position: relative; overflow: hidden;
+      background: #fffdf6; color: #15241d; border: 2px solid #dedbd1; border-radius: calc(var(--cw) * .1);
+      box-shadow: -2px 3px 7px #0006; cursor: grab; user-select: none; -webkit-user-select: none;
+      transition: transform .12s cubic-bezier(.2,.9,.3,1), box-shadow .15s ease;
     }
     .card:active { cursor: grabbing; }
     .card.red { color: #bd263a; }
-    .card.selected {
-      transform: translateY(-12px);
-      border: 3px solid var(--gold);
-      box-shadow: 0 0 0 3px #f6e5a0;
-    }
-    .card.highlighted-high {
-      border: 3px solid #ffcc00 !important;
-      box-shadow: 0 0 16px 4px #ffd700, 0 4px 10px #000;
-      transform: translateY(-4px) scale(1.06);
-    }
-    .card.drag-over {
-      border: 2px dashed var(--gold);
-      transform: scale(1.03);
-    }
+    .card .idx { position: absolute; top: 3px; left: 0; width: calc(var(--cw) * .36); display: flex; flex-direction: column; align-items: center; line-height: 1; font-weight: 900; pointer-events: none; }
+    .card .idx b { font-size: calc(var(--cw) * .25); letter-spacing: -.04em; }
+    .card .idx span { font-size: calc(var(--cw) * .24); margin-top: 1px; }
+    .card .idx.br { top: auto; left: auto; bottom: 6px; right: 0; transform: rotate(180deg); }
+    .card .pip { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding-left: calc(var(--cw) * .14); font-size: calc(var(--cw) * .55); pointer-events: none; }
+    .card .p1 { font-style: normal; font-size: calc(var(--cw) * .13); color: #d4a000; margin-top: 1px; }
+    .card .owner { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--oc, #ccc); }
+    .card.selected { transform: translateY(-26px); border: 3px solid var(--gold); box-shadow: 0 0 0 3px #f6e5a0, 0 8px 18px rgba(0,0,0,.6); }
+    .card.highlighted-high { border: 3px solid #ffcc00; box-shadow: 0 0 16px 4px #ffd700, 0 4px 10px #000; }
+    .card.drag-over { border: 2px dashed var(--gold); }
+    @media (hover: hover) { .cards .card:hover:not(.selected), .pile .card:hover { transform: translateY(-12px); } }
 
-    .rank { font-size: 16px; font-weight: 900; line-height: 1; }
-    .suit { font-size: 25px; text-align: center; line-height: 1; }
-    .bottom { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    .status { font-size: 14px; color: #f7e7ac; min-height: 22px; }
-    .tag { border: 1px solid #547e6e; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #cde0d5; }
-    .modal { background: #0b241d; border: 1px solid #b9a25c; border-radius: 14px; padding: 14px; margin-top: 12px; }
-    .small { font-size: 12px; }
-    .warn { color: #ffb7a9; margin-top: 6px; }
-    
-    .toggle-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 13px;
-      cursor: pointer;
-      user-select: none;
-      background: #09221b;
-      padding: 7px 12px;
-      border-radius: 9px;
-      border: 1px solid #285347;
-    }
+    /* ───────── Stacked hand ───────── */
+    .cards { display: flex; flex-wrap: nowrap; align-items: flex-end; overflow-x: auto; overflow-y: hidden; padding: 32px 8px 6px; min-height: calc(var(--ch) + 38px); scrollbar-width: thin; touch-action: pan-x; }
+    .cards > .card:first-child { margin-left: auto; }
+    .cards > .card:last-child { margin-right: auto; }
+    .cards .card:not(:first-child) { margin-left: calc(var(--ov, 0px) * -1); }
+
+    /* ───────── Stacked table pile (always sorted low → high) ───────── */
+    .pile { --cw: calc(var(--hcw) * .9); --ch: calc(var(--hch) * .9); width: 100%; display: flex; align-items: flex-start; overflow-x: auto; overflow-y: hidden; padding: 20px 6px 4px; scrollbar-width: thin; }
+    .pile > .played:first-child { margin-left: auto; }
+    .pile > .played:last-child { margin-right: auto; }
+    .pile .played:not(:first-child) { margin-left: calc(var(--ov, 0px) * -1); }
+    .played { position: relative; flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+    .played-tag { display: flex; align-items: center; gap: 3px; background: #09201a; padding: 1px 5px; border-radius: 9px; font-size: 10px; max-width: 100%; overflow: hidden; white-space: nowrap; }
+    .played:not(:last-child) .played-tag { max-width: calc(var(--strip, 100px) - 3px); }
+    .played-tag span:last-child { overflow: hidden; text-overflow: ellipsis; }
+    .high-card-pill { position: absolute; top: -17px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #ffd700, #ff9800); color: #17221e; font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 999px; box-shadow: 0 2px 6px rgba(0,0,0,.5); letter-spacing: .05em; z-index: 2; white-space: nowrap; }
+    .pile-empty { padding: 20px 0; }
+
+    /* ───────── Hand panel ───────── */
+    .handpanel { margin: 0; padding: 4px 10px 8px; flex: none; display: flex; flex-direction: column; border-radius: 16px; }
+    .handhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; padding-top: 2px; }
+    .handrow { display: flex; align-items: stretch; gap: 8px; }
+    .handrow .cards { flex: 1; min-width: 0; }
+    .actions { display: flex; flex-direction: column; justify-content: center; gap: 6px; width: 150px; flex: none; }
+    .actions button, .actions .toggle-label { width: 100%; text-align: center; justify-content: center; }
+    .toggle-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; user-select: none; background: #09221b; padding: 5px 10px; border-radius: 9px; border: 1px solid #285347; font-weight: 600; }
     .toggle-label input { cursor: pointer; accent-color: var(--gold); }
     .hit { animation: flash .2s ease-out; }
     @keyframes flash { from { filter: brightness(1.8); } to { filter: brightness(1); } }
 
-    @media (max-width: 760px) {
-      .table-felt { width: 92%; min-height: 180px; }
-      .table-container { padding: 85px 8px; }
-      .card { width: 52px; height: 76px; }
+    /* ───────── Side menu (3-bar) ───────── */
+    #menuBackdrop { position: fixed; inset: 0; background: #0009; z-index: 85; opacity: 0; pointer-events: none; transition: opacity .2s; }
+    #menuBackdrop.open { opacity: 1; pointer-events: auto; }
+    #menu { position: fixed; top: 0; bottom: 0; left: 0; width: min(330px, 88vw); z-index: 90; background: #0c2a22; border-right: 2px solid #285347; padding: 14px; overflow-y: auto; transform: translateX(-102%); transition: transform .22s ease; display: flex; flex-direction: column; gap: 14px; box-shadow: 8px 0 30px #000a; }
+    #menu.open { transform: none; }
+    .menu-head { display: flex; align-items: center; justify-content: space-between; font-size: 18px; font-weight: 800; }
+    .menu-sec { border-top: 1px solid #285347; padding-top: 12px; }
+    .menu-actions { display: grid; gap: 8px; }
+    .menu-actions button { width: 100%; text-align: left; }
+    .qrpanel { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .qrpanel img { background: #fff; border-radius: 8px; padding: 4px; }
+    .bigcode { font-size: 34px; font-weight: 900; letter-spacing: .2em; color: var(--gold); }
+    .tips { margin: 6px 0 0; padding-left: 18px; line-height: 1.5; }
+
+    /* ───────── Popups ───────── */
+    .modal { background: #0b241d; border: 1px solid #b9a25c; border-radius: 14px; padding: 14px; }
+    #requestBox, #surrenderBox, #timeGrantBox, #offerBox, #exitBox, #pausePromptBox { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 100; width: min(420px, 92vw); box-shadow: 0 10px 40px #000c; text-align: center; }
+    .popup { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 50; background: #0b241d; border: 2px solid var(--gold); border-radius: 14px; padding: 12px 18px; box-shadow: 0 8px 30px #000a; text-align: center; max-width: 92vw; }
+    .popup .cards { --ov: calc(var(--cw) * .45); overflow: visible; padding: 8px 8px 4px; min-height: 0; }
+    .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #7a2b22; color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 110; }
+    #scrollMsg { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 75; max-width: 88vw; display: none; text-align: center; background: #fff; color: #222; font-size: 13px; font-weight: 700; padding: 6px 18px; border-radius: 6px; box-shadow: 0 3px 12px #0009; border-left: 7px solid #d8d0bb; border-right: 7px solid #d8d0bb; }
+    #golden { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 80; pointer-events: none; text-align: center; padding: 20px; font-size: clamp(24px, 7vw, 64px); font-weight: 900; color: #ffd700; text-shadow: 0 0 14px #b8860b, 0 3px 6px #000; animation: gpop .4s ease-out; }
+    @keyframes gpop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    /* ───────── Responsive ───────── */
+    @media (max-width: 700px) {
+      #status { order: 5; flex-basis: 100%; }
+      .table-felt { width: 94%; }
+      .table-container { padding: 40px 6px; }
+      .seat-badge { font-size: 10px; padding: 2px 6px; gap: 4px; }
+      .timer-bar { font-size: 12px; padding: 4px 8px; }
     }
-  
-    .card{position:relative}
-    .p1{position:absolute;top:3px;right:4px;font-style:normal;font-size:10px;color:#d4a000;text-shadow:0 0 2px #0003}
-    .popup{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:50;background:#0b241d;border:2px solid var(--gold);border-radius:14px;padding:12px 18px;box-shadow:0 8px 30px #000a;text-align:center;max-width:92vw}
-    .popup .cards{justify-content:center;margin:8px 0 0}
-    .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#7a2b22;color:#fff;padding:10px 16px;border-radius:10px;z-index:60}
-    .qrpanel{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-    .qrpanel img{background:#fff;border-radius:8px;padding:4px}
-    .bigcode{font-size:34px;font-weight:900;letter-spacing:.2em;color:var(--gold)}
-    #highBanner{font-size:14px}
-  
-    #scrollMsg{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:75;max-width:88vw;display:none;text-align:center;background:#fff;color:#222;
-      font-size:13px;font-weight:700;padding:6px 18px;border-radius:6px;box-shadow:0 3px 12px #0009;border-left:7px solid #d8d0bb;border-right:7px solid #d8d0bb}
-    #golden{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:80;pointer-events:none;text-align:center;padding:20px;
-      font-size:clamp(24px,7vw,64px);font-weight:900;color:#ffd700;text-shadow:0 0 14px #b8860b,0 3px 6px #000;animation:gpop .4s ease-out}
-    @keyframes gpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
-    #requestBox,#surrenderBox,#timeGrantBox,#offerBox,#exitBox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;width:min(420px,92vw);box-shadow:0 10px 40px #000c;text-align:center}
-    .cards .card{touch-action:pan-x}
-    /* Phones, portrait or landscape: table (dealt cards) and hand always share one screen */
-    @media (max-width:700px),(max-height:540px){
-      body.inplay{overflow:hidden}
-      body.inplay .app{height:100dvh;display:flex;flex-direction:column;padding:4px 6px;max-width:none}
-      body.inplay header.hero,body.inplay footer,body.inplay .qrpanel,body.inplay #results{display:none}
-      body.inplay #board{flex:1;min-height:0;display:flex;flex-direction:column}
-      body.inplay #board>.panel{margin:3px 0;padding:5px 8px;border-radius:10px;flex:none}
-      body.inplay .table-container{flex:1;min-height:0;height:auto;padding:34px 6px;margin:0 0 3px;border-radius:18px}
-      body.inplay .table-felt{min-height:0;width:68%;max-height:100%;overflow:auto;padding:6px;gap:6px;border-radius:16px;align-content:center}
-      body.inplay .timer-bar{padding:3px 10px;margin-bottom:3px;font-size:13px;flex:none}
-      .status{font-size:12px;min-height:0}
-      button{padding:6px 10px;font-size:12px}
-      .seat-badge{font-size:10px;padding:2px 6px;gap:4px}
-      .card{width:42px;height:60px;padding:3px;border-radius:6px}
-      .rank{font-size:12px}.suit{font-size:17px}
-      .cards{flex-wrap:nowrap;overflow-x:auto;min-height:0;margin:2px 0;padding:14px 4px 4px 4px;align-items:flex-end}
-      .cards .card{flex:0 0 auto}
-      .cards .card:not(:first-child){margin-left:-25px}
-      .cards .card:hover, .cards .card.selected{transform:translateY(-12px) scale(1.05);margin-right:10px;z-index:40 !important}
-      .panel:has(#hand) .hero,.panel:has(#hand)>.muted.small{display:none}
-      .played-tag{font-size:9px}.high-card-pill{font-size:8px;top:-9px}
-      .toggle-label{padding:3px 8px;font-size:11px}
-      #highBanner{font-size:12px;padding:3px 8px;margin-bottom:3px}
+    /* Portrait phones: buttons go in a row under the hand so the hand keeps the full width */
+    @media (max-width: 700px) and (orientation: portrait) {
+      .handrow { flex-direction: column; gap: 2px; }
+      .actions { width: 100%; flex-direction: row; flex-wrap: wrap; }
+      .actions button, .actions .toggle-label { width: auto; flex: 1 1 auto; padding: 8px 10px; font-size: 13px; }
+    }
+    @media (max-height: 540px) {
+      .actions { width: 118px; gap: 4px; }
+      .actions button { padding: 6px 8px; font-size: 12px; }
+      .table-container { padding: 30px 6px; border-radius: 18px; }
+      .table-felt { border-radius: 16px; padding: 4px 8px; }
+      .handhead { display: none; }
+      .cards { padding-top: 30px; }
+      #highBanner { font-size: 11px; padding: 1px 8px; }
+      .played-tag { font-size: 9px; }
+      .high-card-pill { font-size: 8px; top: -13px; }
+      .pile { padding-top: 16px; }
     }
   </style>
 </head>
 <body>
+  <!-- Prompts / popups -->
   <div id="pausePromptBox" class="modal hidden"></div>
   <div id="golden"></div>
   <div id="exitBox" class="modal hidden"><p><strong>Leave this room and go back to the lobby?</strong></p><p class="muted small">If a match is running, your seat is played automatically and removed before the next deal.</p><button id="exitYes" class="btn-danger">Leave</button> <button id="exitNo" class="btn-secondary">Stay</button></div>
   <div id="scrollMsg"></div>
-  <div id="lostBox" style="display:none;position:fixed;inset:0;z-index:95;background:#000d;align-items:center;justify-content:center;flex-direction:column;gap:18px;text-align:center;color:#fff">
+  <div id="lostBox" style="display:none;position:fixed;inset:0;z-index:120;background:#000d;align-items:center;justify-content:center;flex-direction:column;gap:18px;text-align:center;color:#fff">
     <div style="font-size:72px">🫏</div>
     <div style="font-size:clamp(28px,8vw,56px);font-weight:900;color:#ff8a80">You lost the game</div>
     <div class="muted">You were the last player holding cards.</div>
     <button id="lostClose">OK</button>
   </div>
-    <div class="app">
-    <header class="hero">
-      <div>
-        <div class="brand">♠ DONKEY <span>ONLINE</span></div>
-        <div class="muted">Multiplayer card table</div>
-      </div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <button id="fullscreenBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 13px;" onclick="toggleFullScreen()">⛶ Fullscreen</button>
-                <button id="fullscreenBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 13px;" onclick="toggleFullScreen()">⛶ Fullscreen</button>
-        <div id="roomTag" class="tag hidden"></div>
-      </div>
-    </header>
 
-    <section id="lobby" class="panel">
-      <h2>Join a table</h2>
-      <div class="setup">
-        <label class="field">Your name
-          <input id="name" maxlength="24" placeholder="Enter your name (required)" value="" autocomplete="nickname">
-        </label>
-        <label class="field">Deck type
-          <select id="deck">
-            <option value="16">16 cards (Ace to Jack)</option>
-            <option value="32">32 cards (Ace to 7)</option>
-            <option value="52" selected>52 cards (single deck)</option>
-            <option value="104">104 cards (double deck)</option>
-          </select>
-        </label>
-        <div class="field">
-          <span>Create a new table</span>
-          <button id="create">Create room</button>
-        </div>
-        <label class="field">Room code
-          <input id="code" maxlength="6" placeholder="e.g. ABC" style="text-transform:uppercase">
-        </label>
-        <div class="field">
-          <span>Join existing table</span>
-          <button id="join">Join room</button>
-        </div>
+  <!-- 3-bar menu (everything that is not an in-game action lives here) -->
+  <div id="menuBackdrop"></div>
+  <aside id="menu" aria-label="Menu">
+    <div class="menu-head"><span>Menu</span><button id="menuClose" class="btn-secondary iconbtn" aria-label="Close menu">✕</button></div>
+    <div class="tag" id="phaseTag" style="align-self:flex-start">Lobby</div>
+    <div class="menu-sec qrpanel">
+      <img id="qr" alt="Join QR" width="120" height="120">
+      <div>
+        <div class="muted">Room code</div>
+        <div id="qrCode" class="bigcode"></div>
+        <div class="muted small">Scan to join. New players wait until the next match begins.</div>
       </div>
-      <div id="error" class="warn"></div>
+      <div id="waitList" class="small" style="width:100%"></div>
+    </div>
+    <div class="menu-sec menu-actions">
+      <button id="pauseBtn" class="btn-secondary hidden">⏸ Pause game</button>
+      <button id="callOff" class="btn-danger hidden">Call off / new game</button>
+      <button id="sound" class="btn-secondary">🔊 Sound: on</button>
+      <button id="exitBtn" class="btn-secondary">🚪 Exit room</button>
+    </div>
+    <div class="menu-sec muted small">
+      <strong>Playing cards</strong>
+      <ul class="tips">
+        <li>Tap a card to select it, then press <em>Deal card</em> — or double-tap it, or drag it onto the table.</li>
+        <li>Drag cards in your hand to reorder them (this switches Auto-sort off).</li>
+        <li>The table pile is always sorted low → high; the gold card is the current highest lead-suit card.</li>
+        <li>Donkey Online • 50s/15s adaptive timer • offline/inactive players are pruned before a new deal.</li>
+      </ul>
+    </div>
+  </aside>
+
+  <div class="app">
+    <!-- Always-visible bar: menu, fullscreen, room, status, timer -->
+    <div id="topbar">
+      <button id="menuBtn" class="btn-secondary iconbtn hidden" aria-label="Open menu" title="Menu"><span class="burger"><i></i><i></i><i></i></span></button>
+      <button id="fsBtn" class="btn-secondary iconbtn" aria-label="Toggle fullscreen" title="Fullscreen">⛶</button>
+      <div id="roomTag" class="tag hidden"></div>
+      <div id="status"></div>
+      <div id="turnTimerDisplay" class="timer-bar hidden"><span id="turnTimerIcon">⏳</span><span id="turnTimerText">Turn Timer: 50s</span></div>
+    </div>
+
+    <section id="lobby">
+      <div class="brand">♠ DONKEY <span>ONLINE</span></div>
+      <div class="muted">Multiplayer card table</div>
+      <div class="panel">
+        <h2 style="margin-top:0">Join a table</h2>
+        <div class="setup">
+          <label class="field">Your name
+            <input id="name" maxlength="24" placeholder="Enter your name (required)" value="" autocomplete="nickname">
+          </label>
+          <label class="field">Deck type
+            <select id="deck">
+              <option value="16">16 cards (Ace to Jack)</option>
+              <option value="32">32 cards (Ace to 7)</option>
+              <option value="52" selected>52 cards (single deck)</option>
+              <option value="104">104 cards (double deck)</option>
+            </select>
+          </label>
+          <div class="field"><span>Create a new table</span><button id="create">Create room</button></div>
+          <label class="field">Room code
+            <input id="code" maxlength="6" placeholder="e.g. ABC" style="text-transform:uppercase">
+          </label>
+          <div class="field"><span>Join existing table</span><button id="join">Join room</button></div>
+        </div>
+        <div id="error" class="warn"></div>
+      </div>
     </section>
 
     <section id="board" class="hidden">
-      <div class="panel hero">
-        <div>
-          <div class="tag" id="phaseTag">Lobby</div>
-          <div class="status" id="status">Waiting for players…</div>
-        </div>
-        <div class="bottom">
-          <button id="start">Deal & start</button>
-          <button id="exitBtn" class="btn-secondary">Exit room</button>
-          <button id="sound">Sound: on</button>
-          <button id="pauseBtn" class="btn-secondary hidden">Pause Game</button>
-          <button id="callOff" class="btn-danger hidden">Call Off / New Game</button>
-        </div>
-      </div>
-
-      <!-- Universal Turn Countdown Display -->
-      <div id="turnTimerDisplay" class="timer-bar hidden">
-        <span id="turnTimerIcon">⏳</span>
-        <span id="turnTimerText">Turn Timer: 50s</span>
-      </div>
-
-      <div id="highBanner" class="timer-bar hidden"></div>
-
-      <!-- Oval Table Seating Area with Fluorescent Green Flash -->
       <div class="table-container" id="tableContainer">
         <div class="seats-ring" id="seatsRing"></div>
         <div class="table-felt" id="table">
-          <span class="muted">Cards played this round appear here</span>
+          <div id="highBanner" class="timer-bar hidden"></div>
+          <div id="preGame" class="hidden">
+            <div id="results" class="hidden"></div>
+            <div class="muted" id="preHint"></div>
+            <button id="start">Deal & start</button>
+          </div>
+          <div class="pile" id="pile"></div>
         </div>
       </div>
 
-      <!-- Hand Management -->
-      <div class="panel">
-        <div class="hero">
-          <h3>Your hand</h3>
-          <span class="muted" id="handCount"></span>
-        </div>
-        
-        <div class="cards" id="hand"></div>
-        
-        <div class="bottom" style="margin-top: 10px;">
-          <button id="play">Deal selected card</button>
-          <button id="clear">Clear</button>
-
-          <!-- Auto-Sort Toggle -->
-          <label class="toggle-label">
-            <input type="checkbox" id="autoSortToggle">
-            <span>Auto-sort hand</span>
+      <div class="panel handpanel">
+        <div class="handhead">
+          <span>Your hand <span class="muted" id="handCount"></span></span>
+          <label class="toggle-label" title="Keeps suits in alternating colours: black, red, black, red">
+            <input type="checkbox" id="autoSortToggle" checked><span>Auto-sort</span>
           </label>
-
-          <!-- Card Request Option for Trick Starter -->
-          <label id="whipWrap" class="toggle-label hidden"><input type="checkbox" id="whipToggle"> 🪢 Crack whip on this HIT</label>
-          <button id="surrenderBtn" class="btn-secondary hidden" title="Offer surrender"><svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle"><rect x="3" y="2" width="2.2" height="21" rx="1" fill="#8b5a2b"/><path d="M5.2 3Q10 1 14 3T22 3V12Q18 14 14 12T5.2 12Z" fill="#fff"/></svg> Surrender</button>
-          <div id="requestBar" style="display:inline-flex; align-items:center; gap:6px;">
-            <button id="request" class="btn-secondary">Request all cards from next player</button>
+        </div>
+        <div class="handrow">
+          <div class="cards" id="hand"></div>
+          <div class="actions">
+            <button id="play">▶ Deal card</button>
+            <button id="request" class="btn-secondary" title="Ask the next player for all their cards">🂠 Request cards</button>
+            <label id="whipWrap" class="toggle-label hidden"><input type="checkbox" id="whipToggle"> 🪢 Whip on HIT</label>
+            <button id="surrenderBtn" class="btn-secondary hidden" title="Offer surrender"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle"><rect x="3" y="2" width="2.2" height="21" rx="1" fill="#8b5a2b"/><path d="M5.2 3Q10 1 14 3T22 3V12Q18 14 14 12T5.2 12Z" fill="#fff"/></svg> Surrender</button>
           </div>
         </div>
-        <div class="muted small" style="margin-top: 8px;">Drag cards to reorder, or drag one onto the table / double-tap it / select it and press Deal.</div>
         <div id="surrenderBox" class="modal hidden"></div>
         <div id="requestBox" class="modal hidden"></div>
         <div id="timeGrantBox" class="modal hidden"></div>
       </div>
-
-      <div class="panel qrpanel"><img id="qr" alt="Join QR" width="130" height="130"><div><div class="muted">Room code</div><div id="qrCode" class="bigcode"></div><div class="muted small">Scan to join. New players wait until the next match begins.</div><div id="waitList" class="small" style="margin-top:6px"></div></div></div>
-      <div id="results" class="panel hidden"></div>
-
-
     </section>
-
-    <footer class="muted small">Donkey Online • 50s/15s adaptive timer • Offline/inactive players are pruned before a new deal</footer>
   </div>
 
   <script>
-    // Initialize Socket.io client
     const socket = typeof io !== 'undefined' ? io() : null;
-    if (!socket) {
-      alert("Socket.io failed to load. Please check your internet connection.");
-    }
+    if (!socket) alert("Socket.io failed to load. Please check your internet connection.");
 
-    let state = null;
-    let me = null;
-    let previousTurn = null;
+    let state = null, me = null, previousTurn = null;
     let selected = new Set();
-    let soundOn = true;
-    let audioCtx = null;
-    let autoSort = false;
-    let localHand = [];
-    let draggedCardId = null;
-
-    function toggleFullScreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => console.log(err));
-      } else {
-        if (document.exitFullscreen) document.exitFullscreen();
-      }
-    }
-
-    // Alternating suit colors: Black (♠) -> Red (♥) -> Black (♣) -> Red (♦)
-    // Ensures same-color cards never sit together between suits!
-    const DEFAULT_ALTERNATING_SUITS = ['♠', '♥', '♣', '♦'];
-    const RED_SUITS = new Set(['♥', '♦']);
-
-    function getAlternatingSuitOrder(leadSuit) {
-      if (!leadSuit) return DEFAULT_ALTERNATING_SUITS;
-      const isLeadRed = RED_SUITS.has(leadSuit);
-      const sameColorOther = isLeadRed ? (leadSuit === '♥' ? '♦' : '♥') : (leadSuit === '♠' ? '♣' : '♠');
-      const [opp1, opp2] = isLeadRed ? ['♠', '♣'] : ['♥', '♦'];
-      // Alternating pattern: Lead (Color A) -> Opp1 (Color B) -> SameColor (Color A) -> Opp2 (Color B)
-      return [leadSuit, opp1, sameColorOther, opp2];
-    }
-
-    function toggleFullScreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => console.log(err));
-      } else {
-        if (document.exitFullscreen) document.exitFullscreen();
-      }
-    }
+    let soundOn = true, audioCtx = null;
+    let autoSort = true;               // keeps alternating-colour order; a manual drag switches it off
+    let localHand = [], draggedCardId = null;
+    let lastTap = {}, tdrag = null;
 
     const $ = id => document.getElementById(id);
     function err(t) { $('error').textContent = t || ''; }
     function name() { return $('name').value.trim().slice(0, 24); }
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-    $('create').onclick = () => {
-      err('');
-      if (!needName()) return;
-      if (!socket || !socket.connected) {
-        err('Connecting to server... Please wait a moment and try again.');
-        return;
-      }
-      socket.emit('create', { name: name(), deck: +$('deck').value });
-    };
+    /* ───── Fullscreen (single button, always in the top bar) ───── */
+    function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement; }
+    function toggleFullScreen() {
+      const el = document.documentElement;
+      if (!fsElement()) {
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (!req) return toast('Fullscreen is not supported here. On iPhone use Share → Add to Home Screen.');
+        Promise.resolve(req.call(el)).catch(() => toast('Fullscreen was blocked by the browser.'));
+      } else (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+    function fsIcon() { $('fsBtn').textContent = fsElement() ? '🗗' : '⛶'; $('fsBtn').title = fsElement() ? 'Exit fullscreen' : 'Fullscreen'; relayout(); }
+    $('fsBtn').onclick = toggleFullScreen;
+    document.addEventListener('fullscreenchange', fsIcon);
+    document.addEventListener('webkitfullscreenchange', fsIcon);
 
-    $('join').onclick = () => {
-      err('');
-      if (!needName()) return;
-      if (!socket || !socket.connected) {
-        err('Connecting to server... Please wait a moment and try again.');
-        return;
-      }
-      socket.emit('join', { name: name(), code: $('code').value });
-    };
+    /* ───── Menu ───── */
+    function openMenu(open) { $('menu').classList.toggle('open', open); $('menuBackdrop').classList.toggle('open', open); }
+    $('menuBtn').onclick = () => openMenu(!$('menu').classList.contains('open'));
+    $('menuClose').onclick = $('menuBackdrop').onclick = () => openMenu(false);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') openMenu(false); });
 
-    socket.on('created', x => {
-      $('code').value = x.code;
-      $('lobby').classList.add('hidden');$('board').classList.remove('hidden');
-      $('roomTag').classList.remove('hidden');$('roomTag').textContent = 'ROOM ' + x.code;
-      me = socket.id;
+    /* ───── Alternating-colour sorting: ♠ ♥ ♣ ♦ (black, red, black, red) ─────
+       Works with whatever suits are in the hand, and puts the lead suit first when that keeps colours alternating. */
+    const BASE_SUITS = ['♠', '♥', '♣', '♦'];
+    const RED_SUITS = new Set(['♥', '♦']);
+    function suitOrderFor(hand, lead) {
+      const present = BASE_SUITS.filter(s => hand.some(c => c.suit === s));
+      const blacks = present.filter(s => !RED_SUITS.has(s)), reds = present.filter(s => RED_SUITS.has(s));
+      const hasLead = lead && present.includes(lead);
+      let startRed;
+      if (hasLead) {
+        const mine = RED_SUITS.has(lead) ? reds : blacks, other = RED_SUITS.has(lead) ? blacks : reds;
+        startRed = mine.length >= other.length ? RED_SUITS.has(lead) : !RED_SUITS.has(lead);
+      } else startRed = reds.length > blacks.length;
+      let A = startRed ? reds : blacks; const B = startRed ? blacks : reds;
+      if (hasLead && A.includes(lead)) A = [lead, ...A.filter(s => s !== lead)];
+      const out = [];
+      for (let i = 0; i < Math.max(A.length, B.length); i++) { if (i < A.length) out.push(A[i]); if (i < B.length) out.push(B[i]); }
+      return out;
+    }
+    const currentLead = () => (state && state.table && state.table.length ? state.leadSuit : null);
+    function sortLocalHand(lead = currentLead()) {
+      const order = suitOrderFor(localHand, lead);
+      localHand.sort((a, b) => (order.indexOf(a.suit) - order.indexOf(b.suit)) || (b.value - a.value) || (a.pack - b.pack));
+    }
+    function syncHandOrderToServer() { if (socket) socket.emit('reorderHand', { cardIds: localHand.map(c => c.id) }); }
+    $('autoSortToggle').addEventListener('change', e => {
+      autoSort = e.target.checked;
+      if (autoSort) { sortLocalHand(); syncHandOrderToServer(); }
+      renderHand();
     });
 
+    /* ───── Stack layout: as big as possible, overlapped just enough to fit the row ───── */
+    function fitStack(container, items, maxRatio) {
+      if (!items.length) return;
+      const cw = items[0].offsetWidth, avail = container.clientWidth - 16;
+      if (cw <= 0 || avail <= 0) return;
+      let strip = items.length > 1 ? (avail - cw) / (items.length - 1) : cw;
+      strip = Math.max(Math.max(16, cw * 0.3), Math.min(strip, cw * maxRatio));
+      container.style.setProperty('--ov', (cw - strip) + 'px');
+      container.style.setProperty('--strip', strip + 'px');
+    }
+    let rl = 0;
+    function relayout() { cancelAnimationFrame(rl); rl = requestAnimationFrame(() => { if (state) { renderHand(); renderTable(); } }); }
+    window.addEventListener('resize', relayout);
+    window.addEventListener('orientationchange', relayout);
+
+    /* ───── Lobby ───── */
+    function needName() {
+      const n = name();
+      if (!n) { err('Please enter your name first.'); toast('Name is required'); $('name').focus(); return false; }
+      try { localStorage.setItem('donkeyName', n); } catch (e) {}
+      return true;
+    }
+    function ready() { if (!socket || !socket.connected) { err('Connecting to server... Please wait a moment and try again.'); return false; } return true; }
+    $('create').onclick = () => { err(''); if (!needName() || !ready()) return; socket.emit('create', { name: name(), deck: +$('deck').value }); };
+    $('join').onclick = () => { err(''); if (!needName() || !ready()) return; socket.emit('join', { name: name(), code: $('code').value }); };
+
+    function enterBoard(code) {
+      $('lobby').classList.add('hidden'); $('board').classList.remove('hidden');
+      $('roomTag').classList.remove('hidden'); $('roomTag').textContent = 'ROOM ' + code;
+      $('menuBtn').classList.remove('hidden');
+      document.body.classList.add('inboard');
+    }
+    socket.on('created', x => { $('code').value = x.code; enterBoard(x.code); me = socket.id; });
     socket.on('errorMsg', t => { err(t); toast(t); });
     socket.on('kicked', t => { alert(t); location.href = location.pathname; });
+    socket.on('left', () => { location.href = location.pathname; });
     socket.on('tick', t => {
       if (!state) return;
       state.turnSecondsLeft = t.left; state.turnDuration = t.limit; renderTimer();
       document.querySelectorAll('.seat-timer-badge').forEach(e => e.textContent = '⏳ ' + t.left + 's');
     });
+
+    function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3500); }
+
+    /* ───── Card face: index in the top-left so it stays readable when stacked ───── */
+    function face(c) {
+      const mark = state && state.double && c.pack === 0 ? '<i class="p1" title="First pack">●</i>' : '';
+      return `<div class="idx"><b>${c.rank}</b><span>${c.suit}</span>${mark}</div><div class="pip">${c.suit}</div><div class="idx br"><b>${c.rank}</b><span>${c.suit}</span></div>`;
+    }
+
     socket.on('passed', x => {
       const d = document.createElement('div'); d.className = 'popup';
       d.innerHTML = `<strong>${esc(x.from)}</strong> gave <strong>${esc(x.to)}</strong> ${x.count} card${x.count === 1 ? '' : 's'}` +
-        (x.cards ? `<div class="cards">${x.cards.map(c => `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : ''}">${face(c)}</div>`).join('')}</div>` : '');
+        (x.cards ? `<div class="cards">${x.cards.map(c => `<div class="card ${RED_SUITS.has(c.suit) ? 'red' : ''}">${face(c)}</div>`).join('')}</div>` : '');
       document.body.appendChild(d); setTimeout(() => d.remove(), (x.secs || 8) * 1000);
     });
-    function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3500); }
-    function face(c) {
-      const mark = state && state.double && c.pack === 0 ? '<i class="p1" title="First pack">●</i>' : '';
-      return `${mark}<span class="rank">${c.rank}</span><span class="suit">${c.suit}</span><span class="rank" style="text-align:right">${c.rank}</span>`;
-    }
+
     function renderTimer() {
       const td = $('turnTimerDisplay');
       if (state.phase === 'playing' && !state.paused && state.turn) {
@@ -582,24 +438,27 @@
         const ap = state.players.find(p => p.id === state.turn);
         const nm = ap ? (ap.id === me ? 'Your' : ap.name + "'s") : "Player's";
         const secs = state.turnSecondsLeft;
-        $('turnTimerText').textContent = state.settling ? `Settle up: ${nm} turn timer starts in ${secs}s` : state.opening ? `Ace of Spades auto-plays in ${secs}s` : `${nm} turn: ${secs}s left (${state.turnDuration}s total)`;
+        $('turnTimerText').textContent = state.settling ? `Settle up: ${nm} timer starts in ${secs}s` : state.opening ? `Ace of Spades auto-plays in ${secs}s` : `${nm} turn: ${secs}s`;
         td.classList.toggle('urgent', secs <= 10 && !state.settling);
       } else td.classList.add('hidden');
     }
+
     function renderExtras() {
       const mine = state.players.find(p => p.id === me);
       if ($('qr').dataset.code !== state.code) { $('qr').src = '/qr/' + state.code; $('qr').dataset.code = state.code; }
       $('qrCode').textContent = state.code;
       const w = state.players.filter(p => p.wait);
       $('waitList').innerHTML = w.length ? '<b>Waiting for next match:</b> ' + w.map(p => esc(p.name)).join(', ') : '';
+
       const rs = $('results');
       if (state.phase === 'finished') {
         const dk = state.players.find(p => p.id === state.donkey);
         rs.classList.remove('hidden');
         rs.innerHTML = '<h3>Results</h3>' + state.players.filter(p => p.rank).sort((a, b) => a.rank - b.rank).map(p =>
-          `<div>${p.rank === 1 ? '🏆' : p.rank + '.'} <span class="player-dot" style="display:inline-block;background:${p.color}"></span> ${esc(p.name)}</div>`).join('') +
+          `<div>${p.rank === 1 ? '🏆' : p.rank + '.'} <span class="player-dot" style="display:inline-block;vertical-align:middle;background:${p.color}"></span> ${esc(p.name)}</div>`).join('') +
           (dk ? `<div>🫏 <strong>${esc(dk.name)}</strong> is the Donkey</div>` : '');
       } else rs.classList.add('hidden');
+
       const inGame = mine && !mine.wait && mine.handCount > 0 && state.phase === 'playing';
       $('surrenderBtn').classList.toggle('hidden', !(state.canSurrender && inGame && !state.surrender));
       const box = $('surrenderBox'), sur = state.surrender;
@@ -613,117 +472,72 @@
     }
     $('surrenderBtn').onclick = () => { if (confirm('Offer to surrender? If approved you become the Donkey.')) socket.emit('surrender'); };
 
-    $('autoSortToggle').addEventListener('change', (e) => {
-      autoSort = e.target.checked;
-      if (autoSort) {
-        sortLocalHand();
-        syncHandOrderToServer();
-      }
-      renderHand();
-    });
-
-    const currentLead = () => (state && state.table && state.table.length ? state.leadSuit : null);
-    function sortLocalHand(lead = currentLead()) {
-      localHand.sort((a, b) => {
-        if (lead) { const lf = (b.suit === lead) - (a.suit === lead); if (lf !== 0) return lf; }
-        let suitDiff = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
-        if (suitDiff !== 0) return suitDiff;
-        return (b.value - a.value) || (b.pack - a.pack);
-      });
-    }
-
-    function syncHandOrderToServer() {
-      if (socket) socket.emit('reorderHand', { cardIds: localHand.map(c => c.id) });
-    }
-
-    socket.on('starterAlert', () => {
-      beep(660, 0.15);
-      setTimeout(() => beep(880, 0.25), 180);
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-    });
-
+    socket.on('starterAlert', () => { beep(660, .15); setTimeout(() => beep(880, .25), 180); if (navigator.vibrate) navigator.vibrate([200, 100, 200]); });
     socket.on('turnWarning', () => {
-      if (soundOn) {
-        beep(440, 0.1);
-        setTimeout(() => beep(440, 0.1), 180);
-        setTimeout(() => beep(440, 0.15), 360);
-      }
+      if (soundOn) { beep(440, .1); setTimeout(() => beep(440, .1), 180); setTimeout(() => beep(440, .15), 360); }
       if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 200]);
     });
-
     socket.on('allowTimePrompt', ({ forPlayer }) => {
       const box = $('timeGrantBox');
       box.classList.remove('hidden');
-      box.innerHTML = `
-        <p><strong>${esc(forPlayer)}</strong> has 10 seconds remaining! Allow +30s?</p>
-        <button id="approveTimeBtn">Allow 30s</button>
-        <button id="dismissTimeBtn" class="btn-secondary">Dismiss</button>
-      `;
-      $('approveTimeBtn').onclick = () => { socket.emit('grantTime'); box.classList.add('hidden'); };$('dismissTimeBtn').onclick = () => box.classList.add('hidden');
+      box.innerHTML = `<p><strong>${esc(forPlayer)}</strong> has 10 seconds remaining! Allow +30s?</p><button id="approveTimeBtn">Allow 30s</button> <button id="dismissTimeBtn" class="btn-secondary">Dismiss</button>`;
+      $('approveTimeBtn').onclick = () => { socket.emit('grantTime'); box.classList.add('hidden'); };
+      $('dismissTimeBtn').onclick = () => box.classList.add('hidden');
     });
 
     socket.on('state', s => {
       if (state && s.reveal && s.notice && s.notice.startsWith('HIT!')) hitSound();
-
       if (s.turn !== previousTurn) {
         previousTurn = s.turn;
         if (s.phase === 'playing' && s.turn === socket.id) triggerGreenFlashThrice();
       }
-
       state = s;
       if (!me) me = socket.id;
+      enterBoard(s.code);
 
-      $('lobby').classList.add('hidden');$('board').classList.remove('hidden');
-      $('roomTag').classList.remove('hidden');$('roomTag').textContent = 'ROOM ' + s.code;
-
-      const serverHand = s.hand || [];
-      const serverMap = new Map(serverHand.map(c => [c.id, c]));
-
-      let updated = [];
-      for (const card of localHand) {
-        if (serverMap.has(card.id)) {
-          updated.push(serverMap.get(card.id));
-          serverMap.delete(card.id);
-        }
-      }
-      for (const newCard of serverMap.values()) updated.push(newCard);
+      // keep local ordering; add new cards at the end; drop cards that left
+      const serverMap = new Map((s.hand || []).map(c => [c.id, c]));
+      const updated = [];
+      for (const card of localHand) if (serverMap.has(card.id)) { updated.push(serverMap.get(card.id)); serverMap.delete(card.id); }
+      for (const nc of serverMap.values()) updated.push(nc);
       localHand = updated;
+      for (const id of [...selected]) if (!localHand.some(c => c.id === id)) selected.delete(id);
 
       if (autoSort) sortLocalHand(s.table && s.table.length ? s.leadSuit : null);
       render();
     });
 
     function triggerGreenFlashThrice() {
-      const container = $('tableContainer');
-      container.classList.remove('turn-flash-thrice');
-      void container.offsetWidth;
-      container.classList.add('turn-flash-thrice');
+      const c = $('tableContainer');
+      c.classList.remove('turn-flash-thrice'); void c.offsetWidth; c.classList.add('turn-flash-thrice');
     }
 
     function render() {
       if (!state) return;
       $('phaseTag').textContent = (state.paused ? 'PAUSED • ' : '') + state.phase.toUpperCase() + ' • ' + (state.deckSize || 52) + ' CARDS';
-      $('status').textContent = state.notice || '';
-      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing' || state.phase === 'dealing';$('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
+      $('status').textContent = (state.paused ? '⏸ PAUSED — ' : '') + (state.notice || '');
+
+      // Pre-match area (lobby / results) lives on the felt; hidden while a match is running
+      const pre = state.phase === 'lobby' || state.phase === 'finished';
+      $('preGame').classList.toggle('hidden', !pre);
+      $('start').disabled = state.hostId !== me || state.players.length < 2 || state.phase === 'playing' || state.phase === 'dealing';
+      $('start').textContent = state.phase === 'finished' ? 'New deal' : 'Deal & start';
+      $('preHint').textContent = state.hostId === me
+        ? (state.players.length < 2 ? `Room ${state.code} — waiting for players (invite from the ☰ menu)` : 'Everyone ready? Start the match.')
+        : `Room ${state.code} — waiting for the host to deal`;
 
       renderTimer();
 
       const pauseBtn = $('pauseBtn');
-      if (state.phase === 'playing') {
-        pauseBtn.classList.remove('hidden');
-        pauseBtn.textContent = state.paused ? 'Resume Game' : 'Pause Game';
-      } else {
-        pauseBtn.classList.add('hidden');
-      }
+      if (state.phase === 'playing') { pauseBtn.classList.remove('hidden'); pauseBtn.textContent = state.paused ? '▶ Resume game' : '⏸ Pause game'; }
+      else pauseBtn.classList.add('hidden');
 
-      const callOffBtn = $('callOff');
-      const mineP = state.players.find(p => p.id === me);
+      const callOffBtn = $('callOff'), mineP = state.players.find(p => p.id === me);
       if (state.canVote && mineP && !mineP.wait) {
         callOffBtn.classList.remove('hidden');
         callOffBtn.textContent = `Request new game (${state.callOffVotes.length}/${state.voteNeed})`;
       } else callOffBtn.classList.add('hidden');
 
-      document.body.classList.toggle('inplay', state.phase === 'playing' || state.phase === 'dealing');
       renderLost();
       renderExtras();
       const aboutHit = state.phase === 'playing' && state.turn === me && state.table.length > 0 && !!state.leadSuit && !state.hand.some(c => c.suit === state.leadSuit);
@@ -743,212 +557,146 @@
     function renderSeating() {
       const container = $('seatsRing');
       container.innerHTML = '';
-      const players = state.players.filter(p => !p.wait);
-      const count = players.length;
+      const players = state.players.filter(p => !p.wait), count = players.length;
       if (!count) return;
-
       const myIndex = Math.max(0, players.findIndex(p => p.id === me));
-
       players.forEach((p, idx) => {
         const offsetIndex = (idx - myIndex + count) % count;
         const angle = (offsetIndex / count) * 2 * Math.PI + Math.PI / 2;
-        const rx = 44, ry = 42, cx = 50, cy = 50;
-        const x = cx + rx * Math.cos(angle);
-        const y = cy + ry * Math.sin(angle);
-
+        const x = 50 + 44 * Math.cos(angle), y = 50 + 42 * Math.sin(angle);
         const seat = document.createElement('div');
         seat.className = 'player-seat';
-        seat.style.left = `${x}%`;
-        seat.style.top = `${y}%`;
-
+        seat.style.left = `${x}%`; seat.style.top = `${y}%`;
         const isTurn = p.id === state.turn;
         const canKick = state.hostId === me && p.id !== me && state.phase !== 'playing';
-
         seat.innerHTML = `
           <div class="seat-badge ${isTurn ? 'active-turn' : ''}">
-            <span class="player-dot" style="background-color: ${p.color}"></span>
+            <span class="player-dot" style="background-color:${p.color}"></span>
             <span>${esc(p.name)} ${p.id === me ? '(You)' : ''}</span>
             <span class="seat-cards-badge">${p.handCount} 🂠</span>
             ${p.rank ? `<span class="seat-cards-badge">🏆${p.rank}</span>` : ''}${p.id === state.donkey ? '🫏' : ''}
             ${isTurn && state.turnSecondsLeft !== undefined ? `<span class="seat-timer-badge">⏳ ${state.turnSecondsLeft}s</span>` : ''}
             ${!p.online ? '<span class="muted" style="font-size:10px">offline</span>' : ''}
             ${canKick ? `<button class="kick-btn" onclick="kickPlayer('${p.id}')" title="Kick player">×</button>` : ''}
-          </div>
-        `;
+          </div>`;
         container.appendChild(seat);
       });
     }
+    window.kickPlayer = id => { if (confirm('Kick this player?')) socket.emit('kick', { playerId: id }); };
 
-    window.kickPlayer = (id) => {
-      if (confirm('Kick this player?')) socket.emit('kick', { playerId: id });
-    };
-
+    /* Table pile: stacked and always sorted low → high (equal rank: second pack lower) */
     function renderTable() {
-      const tableEl = $('table');
-      tableEl.innerHTML = '';
-
-      if (!state.table || state.table.length === 0) {
-        tableEl.innerHTML = '<span class="muted">Cards played this round appear here</span>';
-        $('highBanner').classList.add('hidden');
+      const pile = $('pile'), hb = $('highBanner');
+      pile.innerHTML = '';
+      if (!state.table || !state.table.length) {
+        if (state.phase === 'playing') pile.innerHTML = '<span class="muted pile-empty">Cards played this round appear here</span>';
+        hb.classList.add('hidden');
         return;
       }
+      const sorted = [...state.table].sort((a, b) => a.card.value - b.card.value || b.card.pack - a.card.pack);
+      const highEntry = state.highId ? state.table.find(x => x.card.id === state.highId) : null;
+      if (highEntry) {
+        hb.classList.remove('hidden'); hb.style.borderColor = highEntry.color;
+        hb.innerHTML = `Highest ${esc(state.leadSuit)}: <span class="player-dot" style="display:inline-block;vertical-align:middle;background:${highEntry.color}"></span> <strong style="color:${highEntry.color}">${esc(highEntry.name || 'Player')}</strong>`;
+      } else hb.classList.add('hidden');
 
-      const sortedCards = [...state.table].sort((a, b) => a.card.value - b.card.value || b.card.pack - a.card.pack);
-      const highCardEntry = state.highId ? state.table.find(x => x.card.id === state.highId) : null;
-      const hb = $('highBanner');
-      if (highCardEntry) { hb.classList.remove('hidden'); hb.style.borderColor = highCardEntry.color; hb.innerHTML = `Highest ${esc(state.leadSuit)} card: <span class="player-dot" style="display:inline-block;background:${highCardEntry.color}"></span> <strong style="color:${highCardEntry.color}">${esc(highCardEntry.name || 'Player')}</strong>`; }
-
-      sortedCards.forEach(item => {
-        const isHigh = highCardEntry && highCardEntry.card.id === item.card.id;
-        const isRed = ['♥', '♦'].includes(item.card.suit);
-        const cardBox = document.createElement('div');
-        cardBox.className = 'played';
-        cardBox.innerHTML = `
+      sorted.forEach((item, i) => {
+        const isHigh = highEntry && highEntry.card.id === item.card.id;
+        const box = document.createElement('div');
+        box.className = 'played';
+        box.style.zIndex = isHigh ? 60 : i + 1;
+        box.title = `${item.name || 'Player'}: ${item.card.rank}${item.card.suit}`;
+        box.innerHTML = `
           ${isHigh ? '<div class="high-card-pill">HIGH CARD</div>' : ''}
-          <div class="card ${isRed ? 'red' : ''} ${isHigh ? 'highlighted-high' : ''}" style="cursor:default">
-            ${face(item.card)}
+          <div class="card ${RED_SUITS.has(item.card.suit) ? 'red' : ''} ${isHigh ? 'highlighted-high' : ''}" style="cursor:default;--oc:${item.color}">
+            ${face(item.card)}<div class="owner"></div>
           </div>
-          <div class="played-tag">
-            <span class="player-dot" style="width:8px; height:8px; background:${item.color}"></span>
-            <span>${esc(item.name || 'Player')}</span>
-          </div>
-        `;
-        tableEl.appendChild(cardBox);
+          <div class="played-tag"><span class="player-dot" style="width:8px;height:8px;border-width:1px;background:${item.color}"></span><span>${esc(item.name || 'Player')}</span></div>`;
+        pile.appendChild(box);
       });
+      fitStack(pile, [...pile.children], .62);
     }
 
+    /* Hand: stacked, large, never needs scrolling in normal play */
     function renderHand() {
       const handEl = $('hand');
       handEl.innerHTML = '';
-      $('handCount').textContent = localHand.length + ' cards';
+      $('handCount').textContent = '· ' + localHand.length + ' card' + (localHand.length === 1 ? '' : 's');
+      $('autoSortToggle').checked = autoSort;
 
       localHand.forEach((c, index) => {
-        const isRed = ['♥', '♦'].includes(c.suit);
-        const isSel = selected.has(c.id);
-
         const card = document.createElement('div');
-        card.className = `card ${isRed ? 'red ' : ''}${isSel ? 'selected' : ''}`;
+        card.className = `card ${RED_SUITS.has(c.suit) ? 'red ' : ''}${selected.has(c.id) ? 'selected' : ''}`;
         card.draggable = true;
-
-        card.innerHTML = `
-          ${face(c)}
-        `;
-
+        card.innerHTML = face(c);
         card.onclick = () => {
           const now = Date.now();
           if (lastTap.id === c.id && now - lastTap.t < 380) { lastTap = {}; playCard(c.id); return; }
           lastTap = { id: c.id, t: now };
-          if (selected.has(c.id)) selected.delete(c.id);
-          else selected.add(c.id);
+          if (selected.has(c.id)) selected.delete(c.id); else selected.add(c.id);
           render();
         };
         card.addEventListener('touchstart', e => touchStart(e, c), { passive: true });
         card.addEventListener('touchmove', touchMove, { passive: false });
         card.addEventListener('touchend', touchEnd);
         card.addEventListener('touchcancel', () => { if (tdrag && tdrag.ghost) tdrag.ghost.remove(); tdrag = null; });
+        card.ondragstart = e => { draggedCardId = c.id; e.dataTransfer.effectAllowed = 'move'; };
         card.ondragend = () => { draggedCardId = null; };
-
-        card.ondragstart = (e) => {
-          draggedCardId = c.id;
-          e.dataTransfer.effectAllowed = 'move';
-        };
-
-        card.ondragover = (e) => { e.preventDefault(); card.classList.add('drag-over'); };
+        card.ondragover = e => { e.preventDefault(); card.classList.add('drag-over'); };
         card.ondragleave = () => card.classList.remove('drag-over');
-        card.ondrop = (e) => {
-          e.preventDefault();
-          card.classList.remove('drag-over');
+        card.ondrop = e => {
+          e.preventDefault(); card.classList.remove('drag-over');
           if (!draggedCardId || draggedCardId === c.id) return;
-          const fromIdx = localHand.findIndex(x => x.id === draggedCardId);
-          const toIdx = localHand.findIndex(x => x.id === c.id);
-          if (fromIdx < 0 || toIdx < 0) return;
-
+          const from = localHand.findIndex(x => x.id === draggedCardId), to = localHand.findIndex(x => x.id === c.id);
+          if (from < 0 || to < 0) return;
           autoSort = false;
-          $('autoSortToggle').checked = false;
-
-          const [movedCard] = localHand.splice(fromIdx, 1);
-          localHand.splice(toIdx, 0, movedCard);
-
-          renderHand();
-          syncHandOrderToServer();
+          const [moved] = localHand.splice(from, 1);
+          localHand.splice(to, 0, moved);
+          renderHand(); syncHandOrderToServer();
         };
-
         card.style.zIndex = index + 1;
         handEl.appendChild(card);
       });
+      fitStack(handEl, [...handEl.children], .62);
     }
 
     function renderRequest() {
-      let q = state.request, box = $('requestBox');
-      box.innerHTML = `
-        <h3>Card request</h3>
+      const q = state.request, box = $('requestBox');
+      box.innerHTML = `<h3>Card request</h3>
         <p>${esc(state.players.find(p => p.id === q.from)?.name || 'A player')} requests <strong>all ${q.count} of your cards</strong>. (Auto-declines in 15s)</p>
-        <div class="bottom"><button id="approve">Approve</button><button id="decline" class="btn-secondary">Decline</button></div>`;
+        <div><button id="approve">Approve</button> <button id="decline" class="btn-secondary">Decline</button></div>`;
       $('approve').onclick = () => socket.emit('respondRequest', { approve: true });
       $('decline').onclick = () => socket.emit('respondRequest', { approve: false });
     }
 
     $('start').onclick = () => { socket.emit('start'); selected.clear(); };
-    $('play').onclick = () => {
-      let id = [...selected][0];
-      if (id) socket.emit('play', { cardId: id, whip: whipOn() });
-      selected.clear();
-    };
-    $('clear').onclick = () => { selected.clear(); render(); };
+    $('play').onclick = () => { const id = [...selected][0]; if (id) socket.emit('play', { cardId: id, whip: whipOn() }); selected.clear(); };
     $('request').onclick = () => socket.emit('requestCards', {});
-    $('sound').onclick = () => {
-      soundOn = !soundOn;
-      $('sound').textContent = 'Sound: ' + (soundOn ? 'on' : 'off');
-    };
+    $('sound').onclick = () => { soundOn = !soundOn; $('sound').textContent = (soundOn ? '🔊' : '🔇') + ' Sound: ' + (soundOn ? 'on' : 'off'); };
 
     socket.on('pausePrompt', ({ byName, byId }) => {
-      if (byId === socket.id) return; // Requester does not need to approve their own request
+      if (byId === socket.id) return;
       const box = $('pausePromptBox');
       box.classList.remove('hidden');
-      box.innerHTML = `
-        <p>⏸ <strong>${esc(byName)}</strong> requested to pause the game. Allow?</p>
-        <button id="pauseApproveBtn">Allow Pause</button>
-        <button id="pauseDeclineBtn" class="btn-secondary">Decline</button>
-      `;
-      $('pauseApproveBtn').onclick = () => {
-        socket.emit('respondPause', { approve: true });
-        box.classList.add('hidden');
-      };
-      $('pauseDeclineBtn').onclick = () => {
-        socket.emit('respondPause', { approve: false });
-        box.classList.add('hidden');
-      };
+      box.innerHTML = `<p>⏸ <strong>${esc(byName)}</strong> requested to pause the game. Allow?</p><button id="pauseApproveBtn">Allow Pause</button> <button id="pauseDeclineBtn" class="btn-secondary">Decline</button>`;
+      $('pauseApproveBtn').onclick = () => { socket.emit('respondPause', { approve: true }); box.classList.add('hidden'); };
+      $('pauseDeclineBtn').onclick = () => { socket.emit('respondPause', { approve: false }); box.classList.add('hidden'); };
     });
+    socket.on('pausePromptDismiss', () => $('pausePromptBox').classList.add('hidden'));
+    $('pauseBtn').onclick = () => { socket.emit('togglePause'); openMenu(false); };
+    $('callOff').onclick = () => { openMenu(false); if (confirm('Vote to call off the current game?')) socket.emit('voteCallOff'); };
 
-    socket.on('pausePromptDismiss', () => {
-      $('pausePromptBox').classList.add('hidden');
-    });
-
-    $('pauseBtn').onclick = () => {
-      socket.emit('togglePause');
-    };
-
-    $('callOff').onclick = () => {
-      if (confirm('Vote to call off the current game?')) {
-        socket.emit('voteCallOff');
-      }
-    };
-
+    /* ───── Sounds ───── */
     function beep(freq, duration) {
       try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        let osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+        const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        g.gain.setValueAtTime(0.12, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-        osc.connect(g);
-        g.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + duration);
+        g.gain.setValueAtTime(.12, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(.01, audioCtx.currentTime + duration);
+        osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
       } catch (e) {}
     }
-
-    let lastTap = {}, tdrag = null;
     const whipOn = () => !$('whipWrap').classList.contains('hidden') && $('whipToggle').checked;
     try { $('whipToggle').checked = localStorage.getItem('donkeyWhip') === '1'; } catch (e) {}
     $('whipToggle').onchange = () => { try { localStorage.setItem('donkeyWhip', $('whipToggle').checked ? '1' : '0'); } catch (e) {} };
@@ -957,17 +705,38 @@
       const d = $('scrollMsg'); d.textContent = x.text; d.style.display = 'block';
       clearTimeout(d._t); d._t = setTimeout(() => d.style.display = 'none', (x.secs || 4) * 1000);
     });
+    socket.on('golden', x => {
+      const g = $('golden'); g.textContent = x.text; g.style.display = 'flex';
+      clearTimeout(g._t); g._t = setTimeout(() => g.style.display = 'none', (x.secs || 3) * 1000);
+    });
     function flick() {
       try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        const c = audioCtx, t = c.currentTime, n = Math.floor(c.sampleRate * 0.04), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+        const c = audioCtx, t = c.currentTime, n = Math.floor(c.sampleRate * .04), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
         for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.5);
         const src = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
-        src.buffer = buf; bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 0.8; g.gain.value = 0.5;
+        src.buffer = buf; bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = .8; g.gain.value = .5;
         src.connect(bp); bp.connect(g); g.connect(c.destination); src.start(t);
       } catch (e) {}
     }
-    
+    function whip() {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const c = audioCtx, t = c.currentTime, o = c.createOscillator(), og = c.createGain();
+        o.type = 'sawtooth'; o.frequency.setValueAtTime(250, t); o.frequency.exponentialRampToValueAtTime(3200, t + .11);
+        og.gain.setValueAtTime(.0001, t); og.gain.linearRampToValueAtTime(.07, t + .08); og.gain.exponentialRampToValueAtTime(.0001, t + .12);
+        o.connect(og); og.connect(c.destination); o.start(t); o.stop(t + .13);
+        const n = Math.floor(c.sampleRate * .22), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 5);
+        const src = c.createBufferSource(), hp = c.createBiquadFilter(), g = c.createGain();
+        src.buffer = buf; hp.type = 'highpass'; hp.frequency.value = 1500; g.gain.value = .9;
+        src.connect(hp); hp.connect(g); g.connect(c.destination); src.start(t + .1);
+      } catch (e) {}
+    }
+    function hitSound() { const t = $('table'); t.classList.remove('hit'); void t.offsetWidth; t.classList.add('hit'); }
+    socket.on('dealCard', () => { if (soundOn) flick(); });
+
+    /* ───── Playing: double-tap, Deal button, or drag onto the table ───── */
     function playCard(id) {
       if (!state || state.phase !== 'playing' || state.turn !== me) return toast('Wait for your turn.');
       socket.emit('play', { cardId: id, whip: whipOn() }); selected.clear();
@@ -979,12 +748,13 @@
       if (!tdrag.ghost) {
         if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
           const g = tdrag.el.cloneNode(true);
-          g.style.cssText = 'position:fixed;z-index:90;pointer-events:none;opacity:.85;transform:scale(1.15)';
+          g.style.cssText = 'position:fixed;z-index:130;pointer-events:none;opacity:.85;margin:0;transform:scale(1.15)';
           document.body.appendChild(g); tdrag.ghost = g;
         } else return;
       }
       e.preventDefault();
-      tdrag.ghost.style.left = (t.clientX - 21) + 'px'; tdrag.ghost.style.top = (t.clientY - 30) + 'px';
+      tdrag.ghost.style.left = (t.clientX - tdrag.el.offsetWidth / 2) + 'px';
+      tdrag.ghost.style.top = (t.clientY - tdrag.el.offsetHeight / 2) + 'px';
     }
     function touchEnd(e) {
       if (!tdrag) return;
@@ -997,50 +767,11 @@
     }
     $('tableContainer').ondragover = e => e.preventDefault();
     $('tableContainer').ondrop = e => { e.preventDefault(); if (draggedCardId) playCard(draggedCardId); draggedCardId = null; };
-    function needName() {
-      const n = name();
-      if (!n) { err('Please enter your name first.'); toast('Name is required'); $('name').focus(); return false; }
-      try { localStorage.setItem('donkeyName', n); } catch (e) {}
-      return true;
-    }
-    socket.on('golden', x => {
-      const g = $('golden'); g.textContent = x.text; g.style.display = 'flex';
-      clearTimeout(g._t); g._t = setTimeout(() => g.style.display = 'none', (x.secs || 3) * 1000);
-    });
-    socket.on('left', () => { location.href = location.pathname; });
-    $('exitBtn').onclick = () => $('exitBox').classList.remove('hidden');
+
+    /* ───── Exit / lost ───── */
+    $('exitBtn').onclick = () => { openMenu(false); $('exitBox').classList.remove('hidden'); };
     $('exitNo').onclick = () => $('exitBox').classList.add('hidden');
     $('exitYes').onclick = () => { socket.emit('leave'); setTimeout(() => { location.href = location.pathname; }, 400); };
-
-    function whip() {
-      try {
-        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        const c = audioCtx, t = c.currentTime;
-        const o = c.createOscillator(), og = c.createGain();
-        o.type = 'sawtooth'; o.frequency.setValueAtTime(250, t); o.frequency.exponentialRampToValueAtTime(3200, t + 0.11);
-        og.gain.setValueAtTime(0.0001, t); og.gain.linearRampToValueAtTime(0.07, t + 0.08); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-        o.connect(og); og.connect(c.destination); o.start(t); o.stop(t + 0.13);
-        const n = Math.floor(c.sampleRate * 0.22), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
-        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 5);
-        const src = c.createBufferSource(), hp = c.createBiquadFilter(), g = c.createGain();
-        src.buffer = buf; hp.type = 'highpass'; hp.frequency.value = 1500; g.gain.value = 0.9;
-        src.connect(hp); hp.connect(g); g.connect(c.destination); src.start(t + 0.1);
-      } catch (e) {}
-    }
-    function hitSound() {
-      $('table').classList.remove('hit');
-      void $('table').offsetWidth;
-      $('table').classList.add('hit');
-    }
-
-    try { $('name').value = localStorage.getItem('donkeyName') || ''; } catch (e) {}
-    const qp = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
-    if (qp) {
-      $('code').value = qp;
-      toast(`Room ${qp} filled in — ${$('name').value ? 'tap Join room' : 'enter your name, then tap Join room'}`);
-      if (!$('name').value) $('name').focus();
-    }
-
     let lostShown = -1;
     function renderLost() {
       const b = $('lostBox');
@@ -1048,7 +779,15 @@
       else if (state.phase !== 'finished') b.style.display = 'none';
     }
     $('lostClose').onclick = () => { lostShown = state.gameNo; $('lostBox').style.display = 'none'; };
-    socket.on('dealCard', () => { if (soundOn) flick(); });
+
+    /* ───── Init ───── */
+    try { $('name').value = localStorage.getItem('donkeyName') || ''; } catch (e) {}
+    const qp = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+    if (qp) {
+      $('code').value = qp;
+      toast(`Room ${qp} filled in — ${$('name').value ? 'tap Join room' : 'enter your name, then tap Join room'}`);
+      if (!$('name').value) $('name').focus();
+    }
   </script>
 </body>
 </html>

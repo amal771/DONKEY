@@ -34,3 +34,11 @@ Node.js + Express + Socket.IO. Files: `server.js`, `package.json`, `public/index
 - The board now fills the screen on every device (no page scrolling in a room). "Deal & start" and the results appear on the felt before/after a match.
 - Fixed: `SUIT_ORDER` was referenced but never defined (sorting threw an error); pause-request popup had no positioning.
 - `server.js` and `package.json` are unchanged.
+
+## v0.9 updates (portrait / vertical layout, up to 20 players)
+- **Portrait phones** (width ≤ 700px) switch from the oval table to a vertical arrangement: opponents sit in two columns either side of the pile (turn order runs up the left column, across the top, and down the right column to the player before you), the pile is a vertical stack in the middle, and your hand is a fan at the bottom.
+- **Scales to 20 players**: with more than 6 opponents per column the player chips switch to a compact one-line form (colour dot, name, card count); the active player is still outlined in neon green.
+- **Vertical pile**: cards stack top → bottom, still sorted low → high, with the owner's name beside every card and a HIGH CARD tag on the highest lead-suit card.
+- **Big hands**: if a hand can't fit on one line at a readable overlap, it wraps into 2–4 overlapping rows instead of scrolling.
+- "● Your turn" indicator and a green outline on the hand panel when it's your turn.
+- Landscape phones, tablets and desktop keep the oval table.
